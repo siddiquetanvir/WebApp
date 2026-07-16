@@ -3,3 +3,5 @@ requests
 numpy
 matplotlib
 seaborn
+plotly
+pandas
