@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- WIKIPEDIA-INSPIRED DARK THEME (forced via .streamlit/config.toml — not left to the visitor's OS setting) ---
+# --- WIKIPEDIA-INSPIRED DARK THEME ---
 WIKI_BLUE = "#3366cc"
 WIKI_BLUE_LIGHT = "#7aa7ff"
 WIKI_BLUE_DARK = "#14428e"
@@ -61,7 +61,9 @@ CUSTOM_CSS = f"""
         color: #f5f8ff !important;
     }}
     section[data-testid="stSidebar"] img {{
-        border-radius: 12px;
+        object-fit: contain !important;
+        background: transparent !important;
+        border-radius: 0 !important;
     }}
     section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small {{
         color: #cdd9f2 !important;
@@ -74,7 +76,6 @@ CUSTOM_CSS = f"""
     }}
     section[data-testid="stSidebar"] textarea::placeholder {{
         color: rgba(255, 255, 255, 0.45) !important;
-        font-style: italic;
     }}
     section[data-testid="stSidebar"] div[data-testid="stExpander"] {{
         background: rgba(255, 255, 255, 0.06);
@@ -119,7 +120,7 @@ CUSTOM_CSS = f"""
         color: {TEXT_LIGHT} !important;
     }}
 
-    /* Hero title — gradient text, no emoji icon */
+    /* Hero title */
     .hero-title {{
         font-size: 2.6rem;
         font-weight: 800;
@@ -136,16 +137,8 @@ CUSTOM_CSS = f"""
         font-size: 1.05rem;
         margin-bottom: 1.1rem;
     }}
-    .hint {{
-        font-size: 0.78rem;
-        color: {TEXT_LIGHT};
-        opacity: 0.6;
-        font-style: italic;
-        margin-top: -6px;
-        margin-bottom: 0.7rem;
-    }}
 
-    /* Segmented view-mode selector (pill-style radio) */
+    /* Segmented view-mode selector */
     div[data-testid="stRadio"] > div {{
         gap: 0.5rem;
     }}
@@ -168,7 +161,7 @@ CUSTOM_CSS = f"""
         font-weight: 700;
     }}
 
-    /* Metric cards — light surface for contrast against the dark canvas */
+    /* Metric cards */
     div[data-testid="stMetric"] {{
         background: {CARD_LIGHT};
         border: 1px solid rgba(20, 66, 142, 0.12);
@@ -185,15 +178,12 @@ CUSTOM_CSS = f"""
         font-weight: 800;
     }}
 
-    /* Heatmap cards — same light-surface treatment as the chart itself */
+    /* Heatmap cards - Wildcard CSS removed here to fix SVG rendering */
     div[data-testid="stVerticalBlockBorderWrapper"] {{
         background: {CARD_LIGHT};
         border-radius: 16px;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
         padding: 0.6rem;
-    }}
-    div[data-testid="stVerticalBlockBorderWrapper"] * {{
-        color: {WIKI_INK} !important;
     }}
 
     div[data-testid="stDataFrame"] {{
@@ -223,14 +213,12 @@ COUNTRY_MAP = {
 }
 
 CODE_RE = re.compile(r'(wlf|wle|wlm|wlb)([a-z]{0,2})(\d{2})')
-EXAMPLE_CODES = "wlfbd21 wlfbd22 wlfbd23 wlfin21 wlfin22 wlfin23"
+EXAMPLE_CODES = "wlmde21 wlmde22 wlmbd22 wlmbd23"
 COUNTRY_OPTIONS = sorted(COUNTRY_MAP.keys(), key=lambda k: COUNTRY_MAP[k])
 
-# Wikipedia-blue gradient colormap for the heatmap (light card surface)
 WIKI_CMAP = LinearSegmentedColormap.from_list(
     "wiki_blue", [CARD_LIGHT, "#bcd4f7", WIKI_BLUE, WIKI_BLUE_DARK, "#0b2b5c"]
 )
-# Glow-style scale for the dark-mode world map
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
 
 
@@ -238,7 +226,7 @@ def country_display_name(cc):
     return COUNTRY_MAP[cc].replace('_', ' ')
 
 
-# --- DATA FETCHING (official Wikimedia Commons API, paginated) ---
+# --- DATA FETCHING (Restored Toolforge Method) ---
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_participants(code):
     try:
@@ -247,38 +235,32 @@ def get_participants(code):
         if not match:
             return set()
         event, cc, yr = match.groups()
-        category = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
-        if cc and cc in COUNTRY_MAP:
-            category += f"_in_{COUNTRY_MAP[cc]}"
+        cat = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
+        if cc:
+            cat += f"_in_{COUNTRY_MAP.get(cc, '')}"
 
-        participants = set()
-        url = "https://commons.wikimedia.org/w/api.php"
-        params = {
-            "action": "query", "generator": "categorymembers",
-            "gcmtitle": f"Category:{category}", "gcmnamespace": 6,
-            "gcmtype": "file", "prop": "imageinfo", "iiprop": "user",
-            "format": "json", "gcmlimit": "max"
-        }
-        while True:
-            data = requests.get(url, params=params, timeout=15).json()
-            pages = data.get('query', {}).get('pages', {})
-            participants.update(
-                p['imageinfo'][0]['user'] for p in pages.values() if p.get('imageinfo')
-            )
-            if 'continue' in data and 'gcmcontinue' in data['continue']:
-                params['gcmcontinue'] = data['continue']['gcmcontinue']
-            else:
+        response = requests.get(
+            'https://ptools.toolforge.org/uploadersincat.php?category=' + cat, timeout=15
+        )
+
+        for uincattxt in response.content.decode("UTF-8").split('fieldset'):
+            if '<legend>List</legend>' in uincattxt:
                 break
-        return participants
+        splt = list(uincattxt.split('>'))
+        users = set()
+
+        for s in splt:
+            if "User:" in s and "href" not in s:
+                users.add(s.replace("User:", "").replace("</a", ""))
+        return users
     except Exception:
         return set()
 
 
 def fetch_all_concurrently(codes):
-    """Fetch participant sets for all codes in parallel for speed."""
     results = {}
     total = len(codes)
-    progress = st.progress(0, text="Fetching data from the Wikimedia Commons API…")
+    progress = st.progress(0, text="Fetching data from Wikimedia Toolforge…")
 
     with ThreadPoolExecutor(max_workers=min(16, max(1, total))) as executor:
         future_to_code = {executor.submit(get_participants, code): code for code in codes}
@@ -297,8 +279,6 @@ def fetch_all_concurrently(codes):
 
 
 def compute_retention_percentages(events):
-    """Ordered-pair (source != target) retention percentages — the basis
-    for the Table and Worldmap summary stats."""
     percentages = []
     for source, target in permutations(events.keys(), 2):
         source_users = events[source]
@@ -309,10 +289,9 @@ def compute_retention_percentages(events):
     return percentages
 
 
-# --- HEATMAP VIEW ---
+# --- VIEWS ---
 def create_heatmap(events, country_name):
     sns.set_theme(style="white")
-
     event_codes = list(events.keys())
     size = len(event_codes)
     matrix = np.zeros((size, size))
@@ -346,8 +325,8 @@ def create_heatmap(events, country_name):
 
     ax.set_title(f"{country_name.replace('_', ' ')} Retention", pad=15, fontweight='bold',
                  fontsize=14, color=WIKI_INK)
-    ax.set_ylabel("Source Event", fontweight='bold', color=WIKI_GRAY)
-    ax.set_xlabel("Target Event", fontweight='bold', color=WIKI_GRAY)
+    ax.set_ylabel("Source", fontweight='bold', color=WIKI_GRAY)
+    ax.set_xlabel("Target", fontweight='bold', color=WIKI_GRAY)
     plt.xticks(rotation=45, ha='right', color=WIKI_GRAY)
     plt.yticks(rotation=0, color=WIKI_GRAY)
     plt.tight_layout()
@@ -363,7 +342,6 @@ def render_heatmap_view(valid_countries):
                 st.pyplot(fig, use_container_width=True)
 
 
-# --- TABLE VIEW ---
 def build_global_table(valid_countries):
     rows = []
     for country_code, events in valid_countries.items():
@@ -372,7 +350,7 @@ def build_global_table(valid_countries):
             continue
         rows.append({
             "Country": country_display_name(country_code),
-            "Events": len(events),
+            "Occurrences": len(events),
             "Avg Retention (%)": round(float(np.mean(percentages)), 1),
             "Median Retention (%)": round(float(np.median(percentages)), 1),
             "Max Retention (%)": round(float(np.max(percentages)), 1),
@@ -388,7 +366,7 @@ def build_global_table(valid_countries):
 def render_table_view(valid_countries):
     table_df = build_global_table(valid_countries)
     if table_df.empty:
-        st.info("No comparable country data yet.")
+        st.info("No comparable country data available.")
         return
     st.dataframe(table_df, use_container_width=True)
     csv_bytes = table_df.to_csv(index=True, index_label="Rank").encode("utf-8")
@@ -398,7 +376,6 @@ def render_table_view(valid_countries):
     )
 
 
-# --- WORLDMAP VIEW ---
 def build_world_data(valid_countries, metric):
     rows = []
     for country_code, events in valid_countries.items():
@@ -409,7 +386,7 @@ def build_world_data(valid_countries, metric):
         rows.append({
             "Country": country_display_name(country_code),
             "Retention (%)": round(value, 1),
-            "Events Compared": len(events),
+            "Occurrences Compared": len(events),
         })
     if not rows:
         return pd.DataFrame()
@@ -425,12 +402,12 @@ def create_worldmap(df, metric_label):
         color_continuous_scale=WORLD_SCALE,
         range_color=(0, max(15, df["Retention (%)"].max() * 1.15)),
         hover_name="Country",
-        hover_data={"Events Compared": True, "Retention (%)": True},
+        hover_data={"Occurrences Compared": True, "Retention (%)": True},
         projection="natural earth",
     )
     fig.update_layout(
         title=dict(text=f"{metric_label} Retention by Country", x=0.02,
-                    font=dict(color=TEXT_LIGHT, size=18, family="Inter, sans-serif")),
+                   font=dict(color=TEXT_LIGHT, size=18, family="Inter, sans-serif")),
         geo=dict(
             showcountries=True, countrycolor="rgba(255,255,255,0.15)",
             showcoastlines=False, showland=True, showocean=False,
@@ -453,26 +430,21 @@ def render_worldmap_view(valid_countries):
     metric_choice = st.radio("Metric", ["Average", "Median"], horizontal=True, key="worldmap_metric")
     world_df = build_world_data(valid_countries, metric_choice)
     if world_df.empty:
-        st.info("No mappable country data yet.")
+        st.info("No mappable country data available.")
         return
     fig = create_worldmap(world_df, metric_choice)
     st.plotly_chart(fig, use_container_width=True)
     st.dataframe(world_df, use_container_width=True, hide_index=True)
 
 
-# --- CODE BUILDER (selector-assisted entry, appends into the manual box) ---
+# --- CODE BUILDER ---
 def add_codes_from_selectors():
-    """Callback: builds codes from the selectors and merges them into the
-    manual text box, run before the text_area widget re-renders."""
     sel_events = st.session_state.get("sel_events", [])
     sel_countries = st.session_state.get("sel_countries", [])
     yr_start, yr_end = st.session_state.get("yr_range", (2021, 2023))
 
-    if not sel_events:
-        st.session_state.builder_msg = "*Pick at least one event first."
-        return
-    if not sel_countries:
-        st.session_state.builder_msg = "*Pick at least one country too."
+    if not sel_events or not sel_countries:
+        st.toast("⚠️ Select at least one event and one country.", icon="⚠️")
         return
 
     new_codes = []
@@ -484,12 +456,12 @@ def add_codes_from_selectors():
     existing = st.session_state.get("code_input", "").split()
     merged = existing + [c for c in new_codes if c not in existing]
     st.session_state.code_input = " ".join(merged)
-    st.session_state.builder_msg = f"*Added {len(new_codes)} code(s) — edit freely below."
+    st.toast(f"Added {len(new_codes)} code(s)!", icon="✅")
 
 
 def clear_code_input():
     st.session_state.code_input = ""
-    st.session_state.builder_msg = ""
+    st.toast("Codes cleared.", icon="🗑️")
 
 
 if "code_input" not in st.session_state:
@@ -500,20 +472,22 @@ METRIC3_LABELS = {"Table": "Rows in Table", "Heatmap": "Heatmaps Generated", "Wo
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.image(KORIKATH_LOGO_URL, width=100)
+    st.markdown(
+        f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="{KORIKATH_LOGO_URL}" alt="Project Korikath Logo" style="width: 140px; height: auto;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.title("Configuration")
-    st.markdown("Type codes manually, or use the builder below to add them for you.")
 
     user_input = st.text_area(
-        "Event Codes", key="code_input", placeholder=EXAMPLE_CODES, height=110
+        "Event Codes (Space-separated)", key="code_input", placeholder=EXAMPLE_CODES, height=110
     )
-    st.markdown('<div class="hint">*separate multiple codes with spaces</div>', unsafe_allow_html=True)
 
     with st.expander("🧭 Guided Builder"):
-        st.markdown(
-            '<div class="hint">*pick options below — no codes to memorize</div>',
-            unsafe_allow_html=True
-        )
         st.multiselect(
             "Events", options=list(EVENT_MAP.keys()),
             format_func=lambda k: EVENT_MAP[k], key="sel_events"
@@ -522,31 +496,28 @@ with st.sidebar:
             "Countries", options=COUNTRY_OPTIONS,
             format_func=country_display_name, key="sel_countries"
         )
-        st.slider("Year range", 2010, 2026, (2021, 2023), key="yr_range")
+        st.slider("Year Range", 2010, 2026, (2021, 2025), key="yr_range")
 
         b_col1, b_col2 = st.columns(2)
-        b_col1.button("➕ Add to input", on_click=add_codes_from_selectors, use_container_width=True)
+        b_col1.button("➕ Add", on_click=add_codes_from_selectors, use_container_width=True)
         b_col2.button("🗑️ Clear", on_click=clear_code_input, use_container_width=True)
-
-        if st.session_state.get("builder_msg"):
-            st.markdown(f'<div class="hint">{st.session_state.builder_msg}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     view_mode = st.radio(
-        "Choose a view", list(VIEW_LABELS.keys()),
+        "Select View", list(VIEW_LABELS.keys()),
         format_func=lambda m: VIEW_LABELS[m], horizontal=True, key="view_mode"
     )
-    run_button = st.button("🚀 Generate", type="primary", use_container_width=True)
+    run_button = st.button("🚀 Generate Dashboard", type="primary", use_container_width=True)
 
     st.markdown("---")
-    st.caption("Powered by the Wikimedia Commons API & Streamlit")
+    st.caption("Powered by Wikimedia Toolforge & Streamlit")
+
 
 # --- MAIN CONTENT ---
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown('<div class="hero-title">Cross-Event Retention Dashboard</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="hero-subtitle">Compare participant retention across Wikimedia campaigns '
-    '— as a heatmap, table, or interactive world map.</div>',
+    '<div class="hero-subtitle">Compare participant retention metrics across Wikimedia campaigns.</div>',
     unsafe_allow_html=True
 )
 
@@ -556,7 +527,7 @@ if run_button:
     valid = [c for c in (re.sub(r'\s+', '', cd).lower() for cd in codes) if CODE_RE.match(c)]
 
     if not valid:
-        st.error("⚠️ No valid event codes found. Please check your formatting.")
+        st.error("Invalid event codes provided.")
         st.stop()
 
     participant_results = fetch_all_concurrently(valid)
@@ -571,23 +542,22 @@ if run_button:
     st.session_state.last_valid_countries = {
         code: events for code, events in country_events.items() if len(events) >= 2
     }
+    
+    if st.session_state.last_valid_countries:
+        st.toast("Data fetched successfully!", icon="✅")
 
 results = st.session_state.get("last_valid_countries")
 
 if results is not None:
     if not results:
-        st.warning(
-            "⚠️ **Not enough data.** Each view needs at least two events "
-            "in the same country to calculate overlap."
-        )
+        st.info("Insufficient data. Ensure at least two overlapping events exist for a targeted country.")
     else:
-        st.success("✅ Data fetched successfully!")
         st.markdown("---")
 
         total_events = sum(len(events) for events in results.values())
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("Countries Analyzed", len(results))
-        col_m2.metric("Total Events Included", total_events)
+        col_m2.metric("Total Occurrences", total_events)
         col_m3.metric(METRIC3_LABELS[view_mode], len(results))
 
         st.markdown("<br>", unsafe_allow_html=True)
