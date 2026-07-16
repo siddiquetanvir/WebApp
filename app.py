@@ -56,6 +56,19 @@ CUSTOM_CSS = f"""
         color: rgba(255, 255, 255, 0.45) !important;
         font-style: italic;
     }}
+    section[data-testid="stSidebar"] div[data-testid="stExpander"] {{
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 10px;
+    }}
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {{
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(255, 255, 255, 0.25) !important;
+        border-radius: 8px !important;
+    }}
+    section[data-testid="stSidebar"] span[data-baseweb="tag"] {{
+        background: {WIKI_BLUE} !important;
+    }}
 
     /* Buttons */
     .stButton > button {{
@@ -231,19 +244,77 @@ def create_heatmap(events, country_name):
     return fig
 
 
+# --- CODE BUILDER (selector-assisted entry, appends into the manual box) ---
+COUNTRY_OPTIONS = [''] + sorted(COUNTRY_MAP.keys(), key=lambda k: COUNTRY_MAP[k])
+
+
+def _format_country(k):
+    return "🌐 Global / No Country" if k == '' else COUNTRY_MAP[k].replace('_', ' ')
+
+
+def add_codes_from_selectors():
+    """Callback: builds codes from the selectors and merges them into the
+    manual text box, run before the text_area widget re-renders."""
+    sel_events = st.session_state.get("sel_events", [])
+    sel_countries = st.session_state.get("sel_countries", [])
+    yr_start, yr_end = st.session_state.get("yr_range", (2021, 2023))
+
+    if not sel_events:
+        st.session_state.builder_msg = "⚠️ Pick at least one event first."
+        return
+
+    countries = sel_countries if sel_countries else ['']
+    new_codes = []
+    for event in sel_events:
+        for country in countries:
+            for yr in range(yr_start, yr_end + 1):
+                new_codes.append(f"{event}{country}{yr % 100:02d}")
+
+    existing = st.session_state.get("code_input", "").split()
+    merged = existing + [c for c in new_codes if c not in existing]
+    st.session_state.code_input = " ".join(merged)
+    st.session_state.builder_msg = f"✅ Added {len(new_codes)} code(s) — edit freely below."
+
+
+def clear_code_input():
+    st.session_state.code_input = ""
+    st.session_state.builder_msg = ""
+
+
+if "code_input" not in st.session_state:
+    st.session_state.code_input = ""
+
 # --- WEB APP INTERFACE ---
 
 with st.sidebar:
     st.image("https://en.wikipedia.org/static/images/project-logos/enwiki.png", width=100)
     st.title("Configuration")
-    st.markdown("Enter your event codes below to scrape Wikimedia and generate retention heatmaps.")
+    st.markdown("Type codes manually, or use the builder below to add them for you.")
 
     user_input = st.text_area(
         "Event Codes (space-separated):",
-        value="",
+        key="code_input",
         placeholder=EXAMPLE_CODES,
-        height=120
+        height=110
     )
+
+    with st.expander("🧩 Build codes from event / country / year"):
+        st.multiselect(
+            "Event(s)", options=list(EVENT_MAP.keys()),
+            format_func=lambda k: EVENT_MAP[k], key="sel_events"
+        )
+        st.multiselect(
+            "Countries (leave empty for global-only)", options=COUNTRY_OPTIONS,
+            format_func=_format_country, key="sel_countries"
+        )
+        st.slider("Year range", 2010, 2026, (2021, 2023), key="yr_range")
+
+        b_col1, b_col2 = st.columns(2)
+        b_col1.button("➕ Add to input", on_click=add_codes_from_selectors, use_container_width=True)
+        b_col2.button("🗑️ Clear", on_click=clear_code_input, use_container_width=True)
+
+        if st.session_state.get("builder_msg"):
+            st.caption(st.session_state.builder_msg)
 
     run_button = st.button("🚀 Generate Dashboard", type="primary", use_container_width=True)
 
