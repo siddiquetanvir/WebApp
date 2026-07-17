@@ -70,7 +70,7 @@ CUSTOM_CSS = f"""
 
     /* --- TOP RIGHT CLEANUP --- */
     .stDeployButton, [data-testid="stHeaderActionElements"] {{ display: none !important; }}
-    header[data-testid="stHeader"] {{ background: transparent !important; }}
+    header[data-testid="stHeader"] {{ background: transparent !important; height: 0px !important; }}
 
     /* Sidebar General */
     section[data-testid="stSidebar"] {{
@@ -85,19 +85,44 @@ CUSTOM_CSS = f"""
     section[data-testid="stSidebar"] div[data-testid="stExpander"] {{ background: {CARD_BG}; border: 1px solid {CARD_BORDER}; border-radius: 10px; }}
     section[data-testid="stSidebar"] div[data-baseweb="select"] > div {{ background: {INPUT_BG} !important; border-color: {CARD_BORDER} !important; border-radius: 8px !important; }}
     
-    /* Buttons */
-    .stButton > button {{
+    /* Target specifically the top-right theme toggle button to look like an icon */
+    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type > div:last-child button {{
+        background: transparent !important;
+        border: 2px solid {CARD_BORDER} !important;
+        border-radius: 8px !important;
+        color: {TEXT_MAIN} !important;
+        box-shadow: none !important;
+        font-size: 1.2rem;
+        height: 42px;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 0.5rem;
+    }}
+    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type > div:last-child button:hover {{
+        border-color: {WIKI_BLUE} !important;
+        color: {WIKI_BLUE} !important;
+        background: rgba(51, 102, 204, 0.1) !important;
+    }}
+
+    /* Standard Primary Buttons */
+    .stButton > button[kind="primary"] {{
         background: linear-gradient(90deg, {WIKI_BLUE} 0%, {WIKI_BLUE_DARK} 100%); color: white !important;
         border: none; border-radius: 10px; font-weight: 600; padding: 0.6em 1em;
         box-shadow: 0 4px 14px rgba(51, 102, 204, 0.35); transition: transform 0.15s ease, box-shadow 0.15s ease;
     }}
-    .stButton > button:hover {{ transform: translateY(-1px); box-shadow: 0 6px 18px rgba(51, 102, 204, 0.45); color: white !important; }}
-    .stButton > button p {{ color: white !important; }}
+    .stButton > button[kind="primary"]:hover {{ transform: translateY(-1px); box-shadow: 0 6px 18px rgba(51, 102, 204, 0.45); color: white !important; }}
+    
+    /* Standard Secondary Buttons (Sidebar Add/Clear) */
+    .stButton > button[kind="secondary"]:not(:first-of-type) {{
+        border-radius: 10px; font-weight: 600;
+    }}
 
     /* Hero title */
     .hero-title {{
         font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; line-height: 1.15;
-        margin: 0.4rem 0 0.15rem 0; background: linear-gradient(90deg, {WIKI_BLUE} 0%, {WIKI_BLUE_DARK} 100%);
+        margin: -1rem 0 0.15rem 0; background: linear-gradient(90deg, {WIKI_BLUE} 0%, {WIKI_BLUE_DARK} 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }}
     .hero-subtitle {{ color: {TEXT_MUTED} !important; font-size: 1.05rem; margin-bottom: 1.1rem; }}
@@ -342,11 +367,6 @@ with st.sidebar:
     
     st.markdown("---")
 
-    # The New Theme Toggle
-    st.session_state.is_dark_mode = st.toggle("🌙 Dark Mode / ☀️ Light Mode", value=st.session_state.is_dark_mode)
-
-    st.markdown("---")
-
     # --- CONDITIONAL SIDEBAR CONTENT ---
     if app_mode == "Retention Dashboard":
         user_input = st.text_area("Event Codes (Space-separated)", key="code_input", placeholder=EXAMPLE_CODES, height=110)
@@ -385,6 +405,18 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption("Powered by Wikimedia Toolforge & Streamlit")
+
+# ==========================================
+# MAIN AREA HEADER (THEME TOGGLE)
+# ==========================================
+# We place this as the very first set of columns in the main container.
+# The custom CSS explicitly targets this first element to style it uniquely.
+top_col1, top_col2 = st.columns([12, 1])
+with top_col2:
+    toggle_icon = "☀️" if st.session_state.is_dark_mode else "🌙"
+    if st.button(toggle_icon, key="theme_toggle_btn", help="Toggle Light/Dark Theme"):
+        st.session_state.is_dark_mode = not st.session_state.is_dark_mode
+        st.rerun()
 
 # ==========================================
 # PAGE 0: DEFAULT LANDING
