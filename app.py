@@ -85,25 +85,42 @@ CUSTOM_CSS = f"""
     section[data-testid="stSidebar"] div[data-testid="stExpander"] {{ background: {CARD_BG}; border: 1px solid {CARD_BORDER}; border-radius: 10px; }}
     section[data-testid="stSidebar"] div[data-baseweb="select"] > div {{ background: {INPUT_BG} !important; border-color: {CARD_BORDER} !important; border-radius: 8px !important; }}
     
-    /* Target specifically the top-right theme toggle button to look like an icon */
-    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type > div:last-child button {{
-        background: transparent !important;
-        border: 2px solid {CARD_BORDER} !important;
-        border-radius: 8px !important;
-        color: {TEXT_MAIN} !important;
-        box-shadow: none !important;
-        font-size: 1.2rem;
-        height: 42px;
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-top: 0.5rem;
+    /* ----------------------------------------------------
+       FIXED POSITIONED THEME TOGGLE (MOBILE & DESKTOP)
+       ---------------------------------------------------- */
+    section[data-testid="stMain"] div[data-testid="stButton"]:first-of-type {{
+        position: fixed !important;
+        top: 1rem !important;
+        right: 1.2rem !important;
+        z-index: 999999 !important;
+        width: 44px !important;
     }}
-    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type > div:last-child button:hover {{
+    section[data-testid="stMain"] div[data-testid="stButton"]:first-of-type button {{
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 12px !important;
+        padding: 0 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        background: {CARD_BG} !important;
+        border: 1px solid {CARD_BORDER} !important;
+        color: {TEXT_MAIN} !important;
+        font-size: 1.5rem !important;
+        font-weight: 300 !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        transition: all 0.2s ease;
+    }}
+    section[data-testid="stMain"] div[data-testid="stButton"]:first-of-type button:hover {{
         border-color: {WIKI_BLUE} !important;
         color: {WIKI_BLUE} !important;
-        background: rgba(51, 102, 204, 0.1) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(0,0,0,0.15) !important;
+    }}
+    section[data-testid="stMain"] div[data-testid="stButton"]:first-of-type button p {{
+        margin: 0 !important; padding: 0 !important; line-height: 1 !important;
     }}
 
     /* Standard Primary Buttons */
@@ -113,32 +130,20 @@ CUSTOM_CSS = f"""
         box-shadow: 0 4px 14px rgba(51, 102, 204, 0.35); transition: transform 0.15s ease, box-shadow 0.15s ease;
     }}
     .stButton > button[kind="primary"]:hover {{ transform: translateY(-1px); box-shadow: 0 6px 18px rgba(51, 102, 204, 0.45); color: white !important; }}
-    
-    /* Standard Secondary Buttons (Sidebar Add/Clear) */
-    .stButton > button[kind="secondary"]:not(:first-of-type) {{
-        border-radius: 10px; font-weight: 600;
-    }}
 
-    /* Hero title */
+    /* Hero title (Pushed down to clear the absolute button) */
     .hero-title {{
         font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; line-height: 1.15;
-        margin: -1rem 0 0.15rem 0; background: linear-gradient(90deg, {WIKI_BLUE} 0%, {WIKI_BLUE_DARK} 100%);
+        margin: 3.5rem 0 0.15rem 0; background: linear-gradient(90deg, {WIKI_BLUE} 0%, {WIKI_BLUE_DARK} 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }}
     .hero-subtitle {{ color: {TEXT_MUTED} !important; font-size: 1.05rem; margin-bottom: 1.1rem; }}
 
-    /* Metric cards */
-    div[data-testid="stMetric"] {{
-        background: {CARD_BG}; border: 1px solid {CARD_BORDER}; border-radius: 14px;
-        padding: 1rem 1.2rem; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-    }}
+    /* Metric cards & Layouts */
+    div[data-testid="stMetric"] {{ background: {CARD_BG}; border: 1px solid {CARD_BORDER}; border-radius: 14px; padding: 1rem 1.2rem; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }}
     div[data-testid="stMetricLabel"] p {{ color: {WIKI_GRAY} !important; font-weight: 600; }}
     div[data-testid="stMetricValue"] {{ color: {WIKI_BLUE_DARK} !important; font-weight: 800; }}
-
-    /* Heatmap containers */
     div[data-testid="stVerticalBlockBorderWrapper"] {{ background: {CARD_BG}; border-radius: 16px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1); padding: 0.6rem; }}
-    div[data-testid="stDataFrame"] {{ border-radius: 12px; overflow: hidden; }}
-    hr {{ border-color: {CARD_BORDER}; }}
     
     /* Evaluation Cards */
     .health-card {{ background: {CARD_BG}; border: 1px solid {CARD_BORDER}; border-radius: 20px; padding: 2.5rem; margin-top: 0.5rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }}
@@ -150,7 +155,16 @@ CUSTOM_CSS = f"""
     
     /* Smart Insights */
     .insight-box {{ border-left: 4px solid {WIKI_BLUE}; background: {INSIGHT_BG}; padding: 1.2rem 1.5rem; border-radius: 0 10px 10px 0; margin-bottom: 1.2rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }}
-    .insight-box p {{ margin: 0 !important; color: {TEXT_MAIN} !important; font-weight: 500; line-height: 1.5; }}
+    
+    /* --- MOBILE RESPONSIVENESS --- */
+    @media (max-width: 768px) {{
+        .hero-title {{ font-size: 2rem !important; margin-top: 3.8rem !important; }}
+        .health-card {{ padding: 1.5rem !important; }}
+        .overall-score {{ font-size: 2.2rem !important; }}
+        section[data-testid="stMain"] div[data-testid="stButton"]:first-of-type {{
+            top: 0.8rem !important; right: 0.8rem !important;
+        }}
+    }}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -174,8 +188,9 @@ REGIONS = {
     "Northern & Western Europe (NWE)": {"retention_base": 25, "growth_base": 20},
     "Global Median": {"retention_base": 12, "growth_base": 50}
 }
-CODE_RE = re.compile(r'(wlf|wle|wlm|wlb)([a-z]{0,2})(\d{2})')
-EXAMPLE_CODES = "wlmde21 wlmde22 wlmbd22 wlmbd23"
+# FIXED REGEX: Now supports 2 to 4 digit years seamlessly (e.g., wlmbd23 or wlmbd2023)
+CODE_RE = re.compile(r'(wlf|wle|wlm|wlb)([a-z]{0,2})(\d{2,4})')
+EXAMPLE_CODES = "wlmde21 wlmde22 wlmbd2022 wlmbd2023"
 COUNTRY_OPTIONS = sorted(COUNTRY_MAP.keys(), key=lambda k: COUNTRY_MAP[k])
 WIKI_CMAP = LinearSegmentedColormap.from_list("wiki_blue", [CHART_BG, "#bcd4f7", WIKI_BLUE, WIKI_BLUE_DARK, "#0b2b5c"])
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
@@ -189,12 +204,17 @@ def get_participants(code):
         code = re.sub(r'\s+', '', code).lower()
         match = CODE_RE.match(code)
         if not match: return set()
+        
         event, cc, yr = match.groups()
-        cat = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
+        yr_int = int(yr)
+        full_year = yr_int if yr_int > 2000 else 2000 + yr_int
+        
+        cat = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{full_year}"
         if cc and event != 'wlb':
             cat += f"_in_{COUNTRY_MAP.get(cc, '')}"
 
         response = requests.get('https://ptools.toolforge.org/uploadersincat.php?category=' + cat, timeout=15)
+        response.raise_for_status() # Check for HTTP errors safely
         content = response.content.decode("UTF-8")
         
         if '<legend>List</legend>' not in content: return set()
@@ -202,17 +222,19 @@ def get_participants(code):
         users = set()
         for uincattxt in content.split('fieldset'):
             if '<legend>List</legend>' in uincattxt:
-                splt = list(uincattxt.split('>'))
-                for s in splt:
+                for s in uincattxt.split('>'):
                     if "User:" in s and "href" not in s:
                         users.add(s.replace("User:", "").replace("</a", ""))
                 break
         return users
-    except Exception: return set()
+    except Exception:
+        return set()
 
 def fetch_all_concurrently(codes):
     results = {}
     total = len(codes)
+    if total == 0: return results
+    
     progress = st.progress(0, text="Fetching data from Wikimedia Toolforge…")
     with ThreadPoolExecutor(max_workers=min(16, max(1, total))) as executor:
         future_to_code = {executor.submit(get_participants, code): code for code in codes}
@@ -238,7 +260,7 @@ def compute_retention_percentages(events):
 def calculate_stars(score, max_score=100):
     normalized = min(max(score / max_score, 0), 1)
     stars = int(round(normalized * 5))
-    return "★" * max(1, stars) + "☆" * (5 - max(1, stars)), stars
+    return "★" * max(1, stars) + "☆" * (5 - max(1, stars))
 
 # --- VIEW RENDERING ---
 def create_heatmap(events, country_name):
@@ -247,9 +269,12 @@ def create_heatmap(events, country_name):
     size = len(event_codes)
     matrix = np.zeros((size, size))
     readable_labels = []
+    
     for code in event_codes:
         event, cc, yr = CODE_RE.match(code).groups()
-        readable_labels.append(f"{EVENT_MAP[event]} 20{yr}")
+        yr_int = int(yr)
+        full_year = yr_int if yr_int > 2000 else 2000 + yr_int
+        readable_labels.append(f"{EVENT_MAP[event]} {full_year}")
 
     for i, source in enumerate(event_codes):
         for j, target in enumerate(event_codes):
@@ -367,7 +392,6 @@ with st.sidebar:
     
     st.markdown("---")
 
-    # --- CONDITIONAL SIDEBAR CONTENT ---
     if app_mode == "Retention Dashboard":
         user_input = st.text_area("Event Codes (Space-separated)", key="code_input", placeholder=EXAMPLE_CODES, height=110)
         with st.expander("🧭 Guided Builder"):
@@ -383,17 +407,21 @@ with st.sidebar:
         run_button = st.button("🚀 Generate Dashboard", type="primary", use_container_width=True)
 
     elif app_mode == "Event Evaluation":
-        target_event = st.text_input("🎯 Target Campaign Code", value="", placeholder="e.g., wlmbd24")
+        target_event = st.text_input("🎯 Target Campaign Code", value="", placeholder="e.g., wlmbd2024")
         st.markdown("---")
         comp_mode = st.radio("Benchmark Against:", ["Previous Year", "Custom Event", "Regional Standard Only"], index=0)
         
         pure_regional_mode = False
         if comp_mode == "Custom Event":
-            baseline_event = st.text_input("⚖️ Baseline Campaign Code", value="", placeholder="e.g., wlmbd22")
+            baseline_event = st.text_input("⚖️ Baseline Campaign Code", value="", placeholder="e.g., wlmbd2023")
         elif comp_mode == "Previous Year":
             try:
                 event, cc, yr = CODE_RE.match(target_event).groups()
-                baseline_event = f"{event}{cc}{int(yr)-1:02d}"
+                yr_int = int(yr)
+                prev_yr = yr_int - 1
+                # Preserve length logic: if they used 4 digits, keep 4. If 2, keep 2.
+                yr_fmt = f"{prev_yr % 100:02d}" if yr_int < 2000 else str(prev_yr)
+                baseline_event = f"{event}{cc}{yr_fmt}"
                 st.info(f"Auto-Baseline: **{baseline_event}**")
             except: baseline_event = ""
         else:
@@ -407,22 +435,18 @@ with st.sidebar:
     st.caption("Powered by Wikimedia Toolforge & Streamlit")
 
 # ==========================================
-# MAIN AREA HEADER (THEME TOGGLE)
+# MAIN AREA HEADER (FIXED TOP RIGHT TOGGLE)
 # ==========================================
-# We place this as the very first set of columns in the main container.
-# The custom CSS explicitly targets this first element to style it uniquely.
-top_col1, top_col2 = st.columns([12, 1])
-with top_col2:
-    toggle_icon = "☀️" if st.session_state.is_dark_mode else "🌙"
-    if st.button(toggle_icon, key="theme_toggle_btn", help="Toggle Light/Dark Theme"):
-        st.session_state.is_dark_mode = not st.session_state.is_dark_mode
-        st.rerun()
+toggle_icon = "☼" if st.session_state.is_dark_mode else "☾"
+if st.button(toggle_icon, key="theme_toggle_btn", help="Toggle Light/Dark Theme"):
+    st.session_state.is_dark_mode = not st.session_state.is_dark_mode
+    st.rerun()
 
 # ==========================================
 # PAGE 0: DEFAULT LANDING
 # ==========================================
 if app_mode is None:
-    st.markdown('<div class="hero-title" style="text-align: center; margin-top: 10vh;">Welcome to Wikimedia Campaigns</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-title" style="text-align: center;">Welcome to Wikimedia Campaigns</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero-subtitle" style="text-align: center;">Please select an option from the sidebar to begin analyzing metrics.</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -476,7 +500,7 @@ elif app_mode == "Event Evaluation":
     st.markdown('<div class="hero-subtitle">Give every campaign a quantifiable quality score and generate smart insights.</div>', unsafe_allow_html=True)
 
     if not target_event and not analyze_btn:
-        st.info("👋 **Welcome to the Assessment Dashboard!** Enter a target campaign code in the sidebar (e.g., `wlmbd24` or `wlmde25`) and click Generate to evaluate its performance.")
+        st.info("👋 **Welcome to the Assessment Dashboard!** Enter a target campaign code in the sidebar (e.g., `wlmbd2024` or `wlmde25`) and click Generate to evaluate its performance.")
         st.stop()
 
     if analyze_btn:
@@ -490,7 +514,7 @@ elif app_mode == "Event Evaluation":
             base_users = users_data.get(baseline_event, set()) if baseline_event else set()
 
             if not target_users:
-                st.error(f"❌ No data found for target event: **{target_event}**. Ensure the code is correctly formatted.")
+                st.error(f"❌ No data found for target event: **{target_event}**. Ensure the code is correctly formatted and data exists.")
                 st.stop()
 
             region_vals = REGIONS[region]
@@ -516,6 +540,7 @@ elif app_mode == "Event Evaluation":
                     growth_score = (growth_rate / region_vals['growth_base']) * 50
                     metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100, growth_score)}
 
+            # Note: Deterministic dummy values generated via target_event seed for UI demo purposes 
             random.seed(target_event)
             safe_ret = retention_rate if 'retention_rate' in locals() else region_vals['retention_base']
             safe_users = len(target_users)
@@ -539,16 +564,16 @@ elif app_mode == "Event Evaluation":
 <div class="health-title"><span>{target_event.upper()} Evaluation</span><span>🔗</span></div>
 <div class="metric-label">Retention ({metrics['Retention']['raw']})</div>
 <div class="metric-desc">Percentage of users retained from the historical baseline campaign.</div>
-<div class="stars">{calculate_stars(metrics['Retention']['score'])[0]}</div>
+<div class="stars">{calculate_stars(metrics['Retention']['score'])}</div>
 <div class="metric-label">Growth ({metrics['Growth']['raw']})</div>
 <div class="metric-desc">Percentage of fresh, first-time contributors participating in this event.</div>
-<div class="stars">{calculate_stars(metrics['Growth']['score'])[0]}</div>
+<div class="stars">{calculate_stars(metrics['Growth']['score'])}</div>
 <div class="metric-label">Quality ({metrics['Quality']['raw']:.1f}%)</div>
 <div class="metric-desc">Calculated index of image survival rates and active article usage on Wikipedia.</div>
-<div class="stars">{calculate_stars(metrics['Quality']['score'])[0]}</div>
+<div class="stars">{calculate_stars(metrics['Quality']['score'])}</div>
 <div class="metric-label">Diversity ({metrics['Diversity']['raw']:.1f}%)</div>
 <div class="metric-desc">Gini-coefficient mapping how evenly uploads are distributed across all users.</div>
-<div class="stars">{calculate_stars(metrics['Diversity']['score'])[0]}</div>
+<div class="stars">{calculate_stars(metrics['Diversity']['score'])}</div>
 <hr style="border-color: {CARD_BORDER}; margin: 1.5rem 0;">
 <div class="metric-label">Overall Evaluation Score</div>
 <div class="overall-score">{metrics['Overall']}<span style="font-size: 1.2rem; color: {TEXT_MUTED};"> / 100</span></div>
