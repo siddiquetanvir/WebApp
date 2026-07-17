@@ -8,9 +8,13 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 
+# =============================================================================
+# WIKIMEDIA CAMPAIGNS DASHBOARD
+# =============================================================================
+
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Wikimedia Campaigns Insights",
+    page_title="Wikimedia Campaigns",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -131,7 +135,7 @@ def get_category_name(code):
         cat += f"_in_{COUNTRY_MAP.get(cc, '')}"
     return cat
 
-# --- ROBUST NATIVE API PARSING METHOD ---
+# --- ROBUST NATIVE API PARSING METHOD (Replaces Toolforge Scraper) ---
 @st.cache_data(show_spinner=False, ttl=1800)
 def get_participants(code):
     cat = get_category_name(code)
@@ -292,36 +296,6 @@ def metric_block_html(label, raw_display, desc, score):
             f'<div class="metric-desc">{desc}</div>'
             f'<div class="stars">{stars_html}</div>')
 
-# --- SIDEBAR NAV ---
-with st.sidebar:
-    st.markdown(f'<div style="text-align: center; margin-bottom: 20px;"><img src="{KORIKATH_LOGO_URL}" alt="Logo" style="width: 140px;"></div>', unsafe_allow_html=True)
-    st.markdown("### Campaign Evaluator")
-    
-    target_event = st.text_input("🎯 Target Campaign Code", value="", placeholder="e.g., wlmbd2024").strip().lower()
-    st.markdown("---")
-    comp_mode = st.radio("Benchmark Against:", ["Previous Year", "Custom Event", "Regional Standard Only"], index=0)
-
-    baseline_event = ""
-    pure_regional_mode = False
-    
-    if comp_mode == "Custom Event":
-        baseline_event = st.text_input("⚖️ Baseline Campaign Code", value="", placeholder="e.g., wlmbd2023").strip().lower()
-    elif comp_mode == "Previous Year" and target_event:
-        try:
-            event, cc, yr = CODE_RE.match(target_event).groups()
-            full_year, is_short = normalize_year(yr)
-            prev_year = full_year - 1
-            prev_str = f"{prev_year % 100:02d}" if is_short else str(prev_year)
-            baseline_event = f"{event}{cc}{prev_str}"
-            st.info(f"Auto-Baseline: **{baseline_event}**")
-        except Exception:
-            baseline_event = ""
-    else:
-        pure_regional_mode = True
-
-    region = st.selectbox("🌍 Geographic Peer Group", list(REGION_COUNTRY_MAP.keys()))
-    analyze_btn = st.button("🩺 Generate Evaluation Report", type="primary", use_container_width=True)
-
 # --- HEADER THEME TOGGLE ---
 st.markdown('<div class="theme-toggle-container">', unsafe_allow_html=True)
 toggle_icon = "☀️ Light UI" if st.session_state.is_dark_mode else "🌙 Dark UI"
@@ -330,128 +304,235 @@ if st.button(toggle_icon, key="theme_toggle_btn"):
     st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- MAIN CONTENT ROW ---
-if not analyze_btn and not target_event:
+# --- SIDEBAR NAV ---
+with st.sidebar:
+    st.markdown(f'<div style="text-align: center; margin-bottom: 20px;"><img src="{KORIKATH_LOGO_URL}" alt="Logo" style="width: 140px;"></div>', unsafe_allow_html=True)
+    
+    app_mode = st.radio("Navigation", ["Retention Dashboard", "Event Evaluation"], label_visibility="collapsed", index=None)
+    st.markdown("---")
+
+    pure_regional_mode = False
+    baseline_event = ""
+    region = list(REGION_COUNTRY_MAP.keys())[0]
+    target_event = ""
+    analyze_btn = False
+
+    if app_mode == "Retention Dashboard":
+        st.info("Navigate to Event Evaluation to run the new unified API metrics.")
+    elif app_mode == "Event Evaluation":
+        target_event = st.text_input("🎯 Target Campaign Code", value="", placeholder="e.g., wlmbd2024").strip().lower()
+        st.markdown("---")
+        comp_mode = st.radio("Benchmark Against:", ["Previous Year", "Custom Event", "Regional Standard Only"], index=0)
+
+        if comp_mode == "Custom Event":
+            baseline_event = st.text_input("⚖️ Baseline Campaign Code", value="", placeholder="e.g., wlmbd2023").strip().lower()
+        elif comp_mode == "Previous Year" and target_event:
+            try:
+                event, cc, yr = CODE_RE.match(target_event).groups()
+                full_year, is_short = normalize_year(yr)
+                prev_year = full_year - 1
+                prev_str = f"{prev_year % 100:02d}" if is_short else str(prev_year)
+                baseline_event = f"{event}{cc}{prev_str}"
+                st.info(f"Auto-Baseline: **{baseline_event}**")
+            except Exception:
+                baseline_event = ""
+        else:
+            baseline_event = ""
+            pure_regional_mode = True
+
+        region = st.selectbox("🌍 Geographic Peer Group", list(REGION_COUNTRY_MAP.keys()))
+        analyze_btn = st.button("🩺 Generate Evaluation Report", type="primary", use_container_width=True)
+
+# --- MAIN PAGE ROUTING ---
+if app_mode is None:
     st.markdown('<div class="hero-title fade-in-up">Wikimedia Campaign Insights</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-subtitle">Provide a campaign code in the sidebar configuration to pull analytical reports via live MediaWiki statistical proxies.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">Pick a tool from the sidebar to get started — evaluate a Wiki Loves campaign or explore retention trends.</div>', unsafe_allow_html=True)
 
-if analyze_btn:
-    if not target_event or (not pure_regional_mode and not baseline_event):
-        st.error("⚠️ Please provide valid target and baseline event codes.")
-        st.stop()
-    if not CODE_RE.match(target_event):
-        st.error(f"⚠️ **{target_event}** doesn't match a recognized event pattern (e.g. `wlmbd2024`).")
-        st.stop()
+elif app_mode == "Retention Dashboard":
+    st.markdown('<div class="hero-title fade-in-up">Retention Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">🚧 This view is under construction — head to Event Evaluation for live unified API metrics.</div>', unsafe_allow_html=True)
 
-    with st.status("Querying MediaWiki APIs for live metrics...", expanded=True) as status:
-        status.write("🔎 Fetching native category member sets...")
-        users_data = fetch_all_concurrently(
-            [target_event] + ([baseline_event] if baseline_event else []),
-            "Synchronizing primary target lists..."
-        )
-        target_users = users_data.get(target_event, set())
-        base_users = users_data.get(baseline_event, set()) if baseline_event else set()
+elif app_mode == "Event Evaluation":
+    st.markdown('<div class="hero-title fade-in-up">Event Evaluation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">Fast Proxy API Metrics: Statistical sampling for rapid, real-world campaign insights.</div>', unsafe_allow_html=True)
 
-        if not target_users:
-            status.update(label="❌ Analysis Failed", state="error")
-            st.error(f"❌ Could not retrieve records for target category: **{target_event}**.")
+    if analyze_btn:
+        if not target_event or (not pure_regional_mode and not baseline_event):
+            st.error("⚠️ Please provide valid event codes.")
+            st.stop()
+        if not CODE_RE.match(target_event):
+            st.error(f"⚠️ **{target_event}** doesn't match a recognized event code pattern (e.g. `wlmbd2024`).")
+            st.stop()
+        if baseline_event and not CODE_RE.match(baseline_event):
+            st.error(f"⚠️ **{baseline_event}** doesn't match a recognized event code pattern (e.g. `wlmbd2023`).")
             st.stop()
 
-        region_vals = {"retention_base": None, "growth_base": None}
-        if not pure_regional_mode:
-            event_type, _, yr_str = CODE_RE.match(target_event).groups()
-            target_yr_int, _ = normalize_year(yr_str)
-            status.write(f"📊 Calculating dynamic medians across {region}...")
-            region_vals = derive_regional_baselines(region, event_type, target_yr_int)
+        with st.status("Querying MediaWiki APIs for live metrics...", expanded=True) as status:
+            status.write("🔎 Fetching uploader lists for target & baseline events...")
+            users_data = fetch_all_concurrently(
+                [target_event] + ([baseline_event] if baseline_event else []),
+                "Fetching primary events..."
+            )
+            target_users = users_data.get(target_event, set())
+            base_users = users_data.get(baseline_event, set()) if baseline_event else set()
 
-        metrics = {}
-        if pure_regional_mode or len(base_users) == 0:
-            metrics['Retention'] = {'raw': 'N/A', 'score': None}
-            metrics['Growth'] = {'raw': 'N/A', 'score': None}
-        else:
-            overlap = len(target_users & base_users)
-            ret_rate = (overlap / len(base_users)) * 100
-            ret_score = (ret_rate / max(1, region_vals['retention_base'])) * 50
-            metrics['Retention'] = {'raw': f"{ret_rate:.1f}%", 'score': min(100, ret_score)}
+            if not target_users:
+                status.update(label="❌ No data found", state="error")
+                st.error(f"❌ No data found for target event: **{target_event}**. Double check the code and try again.")
+                st.stop()
 
-            new_users = len(target_users - base_users)
-            growth_rate = (new_users / len(target_users)) * 100
-            growth_score = (growth_rate / max(1, region_vals['growth_base'])) * 50
-            metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100, growth_score)}
+            region_vals = {"retention_base": None, "growth_base": None}
+            if not pure_regional_mode:
+                event_type, _, yr_str = CODE_RE.match(target_event).groups()
+                target_yr_int, _ = normalize_year(yr_str)
+                status.write(f"📊 Deriving regional baseline metrics for {region}...")
+                region_vals = derive_regional_baselines(region, event_type, target_yr_int)
 
-        status.write("🖼️ Extracting proxy image distribution and global metrics...")
-        quality_raw, diversity_raw, sample_size, unique_contributors = fetch_fast_proxy_metrics(target_event)
+            metrics = {}
+            if pure_regional_mode:
+                metrics['Retention'] = {'raw': 'N/A — no baseline in this mode', 'score': None}
+                metrics['Growth'] = {'raw': 'N/A — no baseline in this mode', 'score': None}
+            elif len(base_users) == 0:
+                metrics['Retention'] = {'raw': 'Baseline Missing', 'score': None}
+                metrics['Growth'] = {'raw': 'Baseline Missing', 'score': None}
+            else:
+                overlap = len(target_users & base_users)
+                ret_rate = (overlap / len(base_users)) * 100
+                ret_score = (ret_rate / max(1, region_vals['retention_base'])) * 50
+                metrics['Retention'] = {'raw': f"{ret_rate:.1f}%", 'score': min(100, ret_score)}
 
-        if quality_raw is not None:
-            metrics['Quality'] = {'raw': f"{quality_raw:.1f}%", 'score': min(100.0, (quality_raw / 15.0) * 100)}
-        else:
-            metrics['Quality'] = {'raw': 'Unavailable', 'score': None}
+                new_users = len(target_users - base_users)
+                growth_rate = (new_users / len(target_users)) * 100
+                growth_score = (growth_rate / max(1, region_vals['growth_base'])) * 50
+                metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100, growth_score)}
 
-        if diversity_raw is not None:
-            metrics['Diversity'] = {'raw': f"{diversity_raw:.1f}", 'score': diversity_raw}
-        else:
-            metrics['Diversity'] = {'raw': 'Unavailable', 'score': None}
+            status.write("🖼️ Sampling media quality & diversity via MediaWiki API...")
+            quality_raw, diversity_raw, sample_size, unique_contributors = fetch_fast_proxy_metrics(target_event)
 
-        WEIGHT_MAP = {'Retention': 0.50, 'Growth': 0.10, 'Quality': 0.25, 'Diversity': 0.15}
-        scored = {k: metrics[k]['score'] for k in WEIGHT_MAP if metrics[k]['score'] is not None}
-        available_weight = sum(WEIGHT_MAP[k] for k in scored)
-        overall_raw = (sum(scored[k] * WEIGHT_MAP[k] for k in scored) / available_weight) if available_weight > 0 else 0
-        metrics['Overall'] = round(overall_raw)
+            if quality_raw is not None:
+                q_score = min(100.0, (quality_raw / 15.0) * 100)
+                metrics['Quality'] = {'raw': quality_raw, 'score': q_score}
+            else:
+                metrics['Quality'] = {'raw': None, 'score': None}
 
-        status.update(label="✅ Performance Framework Constructed", state="complete", expanded=False)
+            if diversity_raw is not None:
+                metrics['Diversity'] = {'raw': diversity_raw, 'score': diversity_raw}
+            else:
+                metrics['Diversity'] = {'raw': None, 'score': None}
 
-    # --- GRID VIEW ---
-    col1, col2 = st.columns([1, 1.2], gap="large")
+            WEIGHT_MAP = {'Retention': 0.50, 'Growth': 0.10, 'Quality': 0.25, 'Diversity': 0.15}
+            scored = {k: metrics[k]['score'] for k in WEIGHT_MAP if metrics[k]['score'] is not None}
+            available_weight = sum(WEIGHT_MAP[k] for k in scored)
+            overall_raw = (sum(scored[k] * WEIGHT_MAP[k] for k in scored) / available_weight) if available_weight > 0 else 0
+            metrics['Overall'] = round(overall_raw)
 
-    with col1:
-        retention_desc = f"Retained users vs regional baseline ({region_vals.get('retention_base', 0):.1f}%)." if metrics['Retention']['score'] else "No baseline context."
-        growth_desc = f"New registration tracking vs baseline ({region_vals.get('growth_base', 0):.1f}%)." if metrics['Growth']['score'] else "No baseline context."
-        quality_desc = f"Proportion of a {sample_size}-file sample used globally across Wiki metrics."
-        diversity_desc = f"Gini indexing calculation across {unique_contributors} distinct upload blocks."
+            status.update(label="✅ Evaluation complete", state="complete", expanded=False)
 
-        overall_score_html = f"{metrics['Overall']}<span style=\"font-size: 1.2rem; color: {TEXT_MUTED};\"> / 100</span>" if available_weight > 0 else "N/A"
-        
-        card_html = f"""<div class="health-card fade-in-up">
-            <div class="health-title"><span>{target_event.upper()} Assessment Summary</span></div>
-            {metric_block_html("User Retention", metrics['Retention']['raw'], retention_desc, metrics['Retention']['score'])}
-            {metric_block_html("Fresh Contributor Growth", metrics['Growth']['raw'], growth_desc, metrics['Growth']['score'])}
-            {metric_block_html("Media Production Utility", metrics['Quality']['raw'], quality_desc, metrics['Quality']['score'])}
-            {metric_block_html("Contributor Diversity Index", metrics['Diversity']['raw'], diversity_desc, metrics['Diversity']['score'])}
-            <hr style="border-color: {CARD_BORDER}; margin: 1.5rem 0;">
-            <div class="metric-label">Unified Structural Health Score</div>
-            <div class="overall-score">{overall_score_html}</div>
-        </div>"""
-        st.markdown(card_html, unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1.2], gap="large")
 
-    with col2:
-        st.markdown("#### 📊 Metric Visual Matrix")
-        score_rows = [(k, metrics[k]['score']) for k in WEIGHT_MAP if metrics[k]['score'] is not None]
-        if score_rows:
-            df_scores = pd.DataFrame(score_rows, columns=["Metric", "Score"])
-            fig = px.bar(df_scores, x="Score", y="Metric", orientation="h", range_x=[0, 100], color="Score",
-                         color_continuous_scale=["#e74c3c", "#f1c40f", "#2ecc71"], range_color=[0, 100], text="Score")
-            fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False)
-            fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color=TEXT_MAIN,
-                              coloraxis_showscale=False, margin=dict(l=10, r=30, t=10, b=10), height=240, yaxis_title=None, xaxis_title=None)
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        
-        st.markdown("### 🧠 Diagnostic Insights")
-        insights = []
+        with col1:
+            retention_desc = (
+                f"Percentage of users retained vs. regional median ({region_vals['retention_base']:.1f}%)."
+                if metrics['Retention']['score'] is not None and region_vals['retention_base'] is not None else
+                "No prior-event data available to compare against."
+            )
+            growth_desc = (
+                f"Percentage of fresh contributors vs. regional median ({region_vals['growth_base']:.1f}%)."
+                if metrics['Growth']['score'] is not None and region_vals['growth_base'] is not None else
+                "No prior-event data available to compare against."
+            )
+            quality_desc = (
+                f"Share of a {sample_size}-file sample currently embedded elsewhere on Wikimedia."
+                if metrics['Quality']['raw'] is not None else
+                "Couldn't sample global usage data for this event."
+            )
+            diversity_desc = (
+                f"Proxy Gini-based balance across {unique_contributors} contributors in the sample."
+                if metrics['Diversity']['raw'] is not None else
+                "Couldn't retrieve category members for this event."
+            )
+            quality_raw_display = f"{metrics['Quality']['raw']:.1f}% Used" if metrics['Quality']['raw'] is not None else "Unavailable"
+            diversity_raw_display = f"{metrics['Diversity']['raw']:.1f}" if metrics['Diversity']['raw'] is not None else "Unavailable"
 
-        if metrics['Retention']['score'] is not None:
-            raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
-            if (raw_ret - region_vals['retention_base']) > 5:
-                insights.append(f"🚀 **Retention Strength:** The event outperformed its local regional baseline target benchmarks ({region_vals['retention_base']:.1f}%).")
-            elif (raw_ret - region_vals['retention_base']) < -5:
-                insights.append(f"📉 **Retention Variance:** The community experienced standard dropouts falling below regional profiles.")
+            if available_weight > 0:
+                overall_score_html = f"{metrics['Overall']}<span style=\"font-size: 1.2rem; color: {TEXT_MUTED};\"> / 100</span>"
+            else:
+                overall_score_html = f"<span style=\"font-size:1.6rem; color:{TEXT_MUTED};\">N/A</span>"
 
-        if quality_raw is not None and quality_raw > 15.0:
-            insights.append(f"🛡️ **High Operational Value:** Over {quality_raw:.1f}% of images sampled have immediate utilization targets globally.")
-        
-        if unique_contributors <= 1:
-            insights.append("🔒 **Monopoly Warning:** The active file batch originates entirely from a single contributor block.")
-        elif diversity_raw is not None and float(metrics['Diversity']['raw']) < 40.0:
-            insights.append("⚠️ **Production Concentration:** The pool presents asset volume skewing toward a minor subset of hyper-uploaders.")
+            overall_note = (
+                f'<div class="metric-desc">Based on available metrics only ({available_weight * 100:.0f}% of full weighting).</div>'
+                if available_weight < 0.999 else ""
+            )
 
-        for ins in insights:
-            st.markdown(f"<div class='insight-box fade-in-up'><p>{ins}</p></div>", unsafe_allow_html=True)
+            card_html = f"""<div class="health-card fade-in-up">
+<div class="health-title"><span>{target_event.upper()} Evaluation</span><span>🔗</span></div>
+{metric_block_html("Retention", metrics['Retention']['raw'], retention_desc, metrics['Retention']['score'])}
+{metric_block_html("Growth", metrics['Growth']['raw'], growth_desc, metrics['Growth']['score'])}
+{metric_block_html("Quality", quality_raw_display, quality_desc, metrics['Quality']['score'])}
+{metric_block_html("Diversity Index", diversity_raw_display, diversity_desc, metrics['Diversity']['score'])}
+<hr style="border-color: {CARD_BORDER}; margin: 1.5rem 0;">
+<div class="metric-label">Overall Evaluation Score</div>
+<div class="overall-score">{overall_score_html}</div>
+{overall_note}
+</div>"""
+            st.markdown(card_html, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("#### 📊 Metric Breakdown")
+            score_rows = [(k, metrics[k]['score']) for k in WEIGHT_MAP if metrics[k]['score'] is not None]
+            if score_rows:
+                df_scores = pd.DataFrame(score_rows, columns=["Metric", "Score"])
+                fig = px.bar(
+                    df_scores, x="Score", y="Metric", orientation="h",
+                    range_x=[0, 100], color="Score",
+                    color_continuous_scale=["#e74c3c", "#f1c40f", "#2ecc71"],
+                    range_color=[0, 100], text="Score"
+                )
+                fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False)
+                fig.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    font_color=TEXT_MAIN, coloraxis_showscale=False,
+                    margin=dict(l=10, r=30, t=10, b=10), height=220,
+                    yaxis_title=None, xaxis_title=None
+                )
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.info("No metrics could be scored for this event yet.")
+
+            st.markdown("### 🧠 Smart Insights")
+            st.markdown(f"<p style='color: {TEXT_MUTED}; margin-bottom: 1.5rem;'>Insights are generated dynamically using fast statistical proxies from live API data.</p>", unsafe_allow_html=True)
+
+            insights = []
+
+            if metrics['Retention']['score'] is not None:
+                raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
+                ret_diff = raw_ret - region_vals['retention_base']
+                if ret_diff > 5:
+                    insights.append(f"🚀 <strong>Retention Outperformance:</strong> Your retention rate beat the {region.split(' (')[0]} median of {region_vals['retention_base']:.1f}%.")
+                elif ret_diff < -5:
+                    insights.append(f"📉 <strong>Retention Warning:</strong> Retention dropped below the regional {region_vals['retention_base']:.1f}% standard.")
+            elif pure_regional_mode:
+                insights.append("ℹ️ <strong>Regional Mode:</strong> Retention & Growth need a baseline event, so only Quality and Diversity count toward the Overall score here.")
+            else:
+                insights.append("⚠️ <strong>No Baseline Data:</strong> Couldn't find uploaders for the baseline event, so Retention & Growth are excluded from the Overall score.")
+
+            if metrics['Quality']['raw'] is not None:
+                if metrics['Quality']['raw'] > 15.0:
+                    insights.append(f"🛡️ <strong>High Media Utility:</strong> Over {metrics['Quality']['raw']:.1f}% of the {sample_size}-file sample are embedded in Wikimedia projects.")
+                elif metrics['Quality']['raw'] < 5.0:
+                    insights.append(f"⚠️ <strong>Low Media Utility:</strong> Only {metrics['Quality']['raw']:.1f}% of the sampled files are actively used.")
+            else:
+                insights.append("⚠️ <strong>Quality Data Unavailable:</strong> Couldn't sample global usage for this event's uploads.")
+
+            if metrics['Diversity']['raw'] is not None:
+                if unique_contributors <= 1:
+                    insights.append("🔒 <strong>Sole Contributor:</strong> Every sampled file came from a single uploader — there's no contributor diversity to measure yet.")
+                elif metrics['Diversity']['raw'] < 40:
+                    insights.append(f"⚠️ <strong>Concentrated Uploads:</strong> The sampled pool of {unique_contributors} contributors is dominated by a few power users.")
+                else:
+                    insights.append(f"⚖️ <strong>Democratic Participation:</strong> Good contributor balance across {unique_contributors} uploaders in the sample.")
+            else:
+                insights.append("⚠️ <strong>Diversity Data Unavailable:</strong> Couldn't retrieve category members for this event.")
+
+            for insight in insights:
+                st.markdown(f"<div class='insight-box fade-in-up'><p>{insight}</p></div>", unsafe_allow_html=True)
