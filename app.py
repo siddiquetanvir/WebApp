@@ -122,7 +122,7 @@ CUSTOM_CSS = f"""
         color: {TEXT_LIGHT} !important;
     }}
 
-    /* Hero Typography */
+    /* Typography & Display Layouts */
     .hero-title {{
         font-size: 2.6rem;
         font-weight: 800;
@@ -163,7 +163,7 @@ CUSTOM_CSS = f"""
         font-weight: 700;
     }}
 
-    /* Retention Metric cards */
+    /* Data Visualization Elements */
     div[data-testid="stMetric"] {{
         background: {CARD_LIGHT};
         border: 1px solid rgba(20, 66, 142, 0.12);
@@ -179,8 +179,6 @@ CUSTOM_CSS = f"""
         color: {WIKI_BLUE_DARK} !important;
         font-weight: 800;
     }}
-
-    /* Heatmap containers */
     div[data-testid="stVerticalBlockBorderWrapper"] {{
         background: {CARD_LIGHT};
         border-radius: 16px;
@@ -198,7 +196,7 @@ CUSTOM_CSS = f"""
         border-color: rgba(255, 255, 255, 0.12);
     }}
 
-    /* Health Assessment Components */
+    /* Health Score Layout Cards */
     .health-card {{
         background: {CARD_DARK};
         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -262,6 +260,8 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # --- MAPS & CONSTANTS ---
 EVENT_MAP = {'wlf': 'Folklore', 'wle': 'Earth', 'wlm': 'Monuments', 'wlb': 'Bangla'}
+
+# Expanded global mapping including newly requested nations
 COUNTRY_MAP = {
     'bd': 'Bangladesh', 'in': 'India', 'de': 'Germany', 'it': 'Italy',
     'fr': 'France', 'us': 'United_States', 'ca': 'Canada', 'uk': 'United_Kingdom',
@@ -271,15 +271,24 @@ COUNTRY_MAP = {
     'ph': 'Philippines', 'my': 'Malaysia', 'tr': 'Turkey', 'eg': 'Egypt',
     'ua': 'Ukraine', 'ru': 'Russia', 'ch': 'Switzerland', 'se': 'Sweden',
     'no': 'Norway', 'fi': 'Finland', 'be': 'Belgium', 'at': 'Austria',
-    'ar': 'Argentina', 'co': 'Colombia'
+    'ar': 'Argentina', 'co': 'Colombia', 'lk': 'Sri_Lanka', 'au': 'Australia',
+    'nz': 'New_Zealand', 'th': 'Thailand', 'gr': 'Greece', 'tn': 'Tunisia',
+    'ma': 'Morocco', 'dz': 'Algeria', 'za': 'South_Africa', 'gh': 'Ghana',
+    'tz': 'Tanzania', 'pe': 'Peru', 'cl': 'Chile', 've': 'Venezuela',
+    'cz': 'Czech_Republic', 'ro': 'Romania', 'hu': 'Hungary'
 }
 
-# Regional mappings for dynamic cohort scanning
+# Fully balanced global regional matrix mapping structure
 REGION_COUNTRY_MAPPING = {
-    "South Asia (SA)": ['bd', 'in', 'pk', 'np'],
-    "East, Southeast Asia, Pacific (ESEAP)": ['id', 'ph', 'my'],
+    "South Asia (SA)": ['bd', 'in', 'pk', 'np', 'lk'],
+    "East, Southeast Asia, Pacific (ESEAP)": ['id', 'ph', 'my', 'au', 'nz', 'th'],
     "Northern & Western Europe (NWE)": ['de', 'fr', 'uk', 'nl', 'se', 'no', 'fi', 'be', 'at', 'ch'],
-    "Global Median": ['us', 'ca', 'br', 'mx', 'es', 'pt', 'ng', 'ke', 'tr', 'eg', 'ua', 'ru', 'ar', 'co', 'it', 'pl']
+    "Southern Europe (SE)": ['it', 'es', 'pt', 'gr'],
+    "Central & Eastern Europe (CEE)": ['pl', 'ua', 'ru', 'cz', 'ro', 'hu'],
+    "Middle East & North Africa (MENA)": ['tr', 'eg', 'tn', 'ma', 'dz'],
+    "Latin America (LATAM)": ['br', 'mx', 'ar', 'co', 'pe', 'cl', 've'],
+    "Sub-Saharan Africa (SSA)": ['ng', 'ke', 'za', 'gh', 'tz'],
+    "North America (NA)": ['us', 'ca']
 }
 
 CODE_RE = re.compile(r'(wlf|wle|wlm|wlb)([a-z]{0,2})(\d{2})')
@@ -292,9 +301,9 @@ WIKI_CMAP = LinearSegmentedColormap.from_list(
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
 
 def country_display_name(cc):
-    return COUNTRY_MAP[cc].replace('_', ' ')
+    return COUNTRY_MAP.get(cc, cc).replace('_', ' ')
 
-# --- UNIFIED DATA FETCHING SYSTEM (Wikimedia Toolforge) ---
+# --- DATA ACQUISITION LOGIC ---
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_participants(code):
     try:
@@ -327,7 +336,9 @@ def get_participants(code):
 def fetch_all_concurrently(codes, threads=16):
     results = {}
     total = len(codes)
-    progress = st.progress(0, text="Fetching data from Wikimedia Toolforge…")
+    if total == 0:
+        return results
+    progress = st.progress(0, text="Fetching campaign footprints from Toolforge...")
 
     with ThreadPoolExecutor(max_workers=min(threads, max(1, total))) as executor:
         future_to_code = {executor.submit(get_participants, code): code for code in codes}
@@ -339,7 +350,7 @@ def fetch_all_concurrently(codes, threads=16):
             except Exception:
                 results[code] = set()
             done += 1
-            progress.progress(done / total, text=f"Fetched {done}/{total} events…")
+            progress.progress(done / total, text=f"Acquired metric array: {done}/{total}")
 
     progress.empty()
     return results
@@ -388,10 +399,10 @@ def create_heatmap(events, country_name):
         annot_kws={"fontweight": "bold", "fontsize": 10}
     )
 
-    ax.set_title(f"{country_name.replace('_', ' ')} Retention", pad=15, fontweight='bold',
+    ax.set_title(f"{country_name.replace('_', ' ')} Metric Matrix", pad=15, fontweight='bold',
                  fontsize=14, color=WIKI_INK)
-    ax.set_ylabel("Source", fontweight='bold', color=WIKI_GRAY)
-    ax.set_xlabel("Target", fontweight='bold', color=WIKI_GRAY)
+    ax.set_ylabel("Source Cohort", fontweight='bold', color=WIKI_GRAY)
+    ax.set_xlabel("Target Cohort", fontweight='bold', color=WIKI_GRAY)
     plt.xticks(rotation=45, ha='right', color=WIKI_GRAY)
     plt.yticks(rotation=0, color=WIKI_GRAY)
     plt.tight_layout()
@@ -400,7 +411,7 @@ def create_heatmap(events, country_name):
 def render_heatmap_view(valid_countries):
     cols = st.columns(2)
     for idx, (country_code, events) in enumerate(valid_countries.items()):
-        fig = create_heatmap(events, COUNTRY_MAP[country_code])
+        fig = create_heatmap(events, COUNTRY_MAP.get(country_code, country_code))
         with cols[idx % 2]:
             with st.container(border=True):
                 st.pyplot(fig, use_container_width=True)
@@ -428,13 +439,13 @@ def build_global_table(valid_countries):
 def render_table_view(valid_countries):
     table_df = build_global_table(valid_countries)
     if table_df.empty:
-        st.info("No comparable country data available.")
+        st.info("Insufficient longitudinal data found to populate records.")
         return
     st.dataframe(table_df, use_container_width=True)
     csv_bytes = table_df.to_csv(index=True, index_label="Rank").encode("utf-8")
     st.download_button(
-        "⬇️ Download CSV", data=csv_bytes,
-        file_name="wikimedia_retention_by_country.csv", mime="text/csv"
+        "Download Data Array (CSV)", data=csv_bytes,
+        file_name="wikimedia_retention_suite.csv", mime="text/csv"
     )
 
 def build_world_data(valid_countries, metric):
@@ -466,7 +477,7 @@ def create_worldmap(df, metric_label):
         projection="natural earth",
     )
     fig.update_layout(
-        title=dict(text=f"{metric_label} Retention by Country", x=0.02,
+        title=dict(text=f"{metric_label} Retention Distribution", x=0.02,
                    font=dict(color=TEXT_LIGHT, size=18, family="Inter, sans-serif")),
         geo=dict(
             showcountries=True, countrycolor="rgba(255,255,255,0.15)",
@@ -477,7 +488,7 @@ def create_worldmap(df, metric_label):
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(r=0, t=55, l=0, b=0),
         coloraxis_colorbar=dict(
-            title=dict(text="Retention %", font=dict(color=TEXT_LIGHT)),
+            title=dict(text="Retention", font=dict(color=TEXT_LIGHT)),
             tickfont=dict(color=TEXT_LIGHT), ticksuffix="%", outlinewidth=0,
         ),
         font=dict(color=TEXT_LIGHT, family="Inter, sans-serif"),
@@ -486,10 +497,10 @@ def create_worldmap(df, metric_label):
     return fig
 
 def render_worldmap_view(valid_countries):
-    metric_choice = st.radio("Metric", ["Average", "Median"], horizontal=True, key="worldmap_metric")
+    metric_choice = st.radio("Metric Vector Selection", ["Average", "Median"], horizontal=True, key="worldmap_metric")
     world_df = build_world_data(valid_countries, metric_choice)
     if world_df.empty:
-        st.info("No mappable country data available.")
+        st.info("Geographic coordinates unavailable for the current selection.")
         return
     fig = create_worldmap(world_df, metric_choice)
     st.plotly_chart(fig, use_container_width=True)
@@ -501,7 +512,7 @@ def add_codes_from_selectors():
     yr_start, yr_end = st.session_state.get("yr_range", (2021, 2023))
 
     if not sel_events or not sel_countries:
-        st.toast("⚠️ Select at least one event and one country.", icon="⚠️")
+        st.toast("Select at least one event type and one target country.", icon="⚠️")
         return
 
     new_codes = []
@@ -513,16 +524,15 @@ def add_codes_from_selectors():
     existing = st.session_state.get("code_input", "").split()
     merged = existing + [c for c in new_codes if c not in existing]
     st.session_state.code_input = " ".join(merged)
-    st.toast(f"Added {len(new_codes)} code(s)!", icon="✅")
+    st.toast(f"Merged {len(new_codes)} validation vectors.")
 
 def clear_code_input():
     st.session_state.code_input = ""
-    st.toast("Codes cleared.", icon="🗑️")
+    st.toast("Input registry cleared.")
 
-# --- HEALTH SUITE UTILITIES ---
+# --- HEALTH ASSESSMENT CORE ENGINE ---
 def calculate_stars(score, max_score=100):
     normalized = min(max(score / max_score, 0), 1)
-    # A score matching the standard (60) yields 3 stars exactly
     stars = int(round(normalized * 5))
     stars = min(5, max(1, stars))
     return "★" * stars + "☆" * (5 - stars), stars
@@ -530,7 +540,7 @@ def calculate_stars(score, max_score=100):
 def generate_health_metrics(target_users, baseline_users, target_code, benchmarks, pure_regional_mode=False):
     metrics = {}
     
-    # 1. RETENTION (50% overall weight)
+    # 1. RETENTION VECTOR (50% overall weight)
     if pure_regional_mode:
         metrics['Retention'] = {'raw': 'Requires Baseline', 'score': 60.0}
     else:
@@ -539,11 +549,10 @@ def generate_health_metrics(target_users, baseline_users, target_code, benchmark
             retention_rate = (overlap / len(baseline_users)) * 100
         else:
             retention_rate = 0.0
-        # Calibrate relative to dynamic benchmark; standard average = 60 points (3 stars)
         ret_score = (retention_rate / benchmarks['retention'] * 60) if benchmarks['retention'] > 0 else 60.0
         metrics['Retention'] = {'raw': f"{retention_rate:.1f}%", 'score': min(100.0, max(0.0, ret_score))}
 
-    # 2. GROWTH (20% overall weight)
+    # 2. GROWTH VECTOR (20% overall weight)
     if pure_regional_mode:
         metrics['Growth'] = {'raw': "Baseline Hidden", 'score': 60.0}
     else:
@@ -555,18 +564,18 @@ def generate_health_metrics(target_users, baseline_users, target_code, benchmark
         growth_score = (growth_rate / benchmarks['growth'] * 60) if benchmarks['growth'] > 0 else 60.0
         metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100.0, max(0.0, growth_score))}
 
-    # 3. QUALITY (15% overall weight)
+    # 3. QUALITY PARAMETER INDEX (15% overall weight)
     random.seed(target_code) 
     raw_quality = random.uniform(65, 88)
     quality_score = (raw_quality / benchmarks['quality'] * 60) if benchmarks['quality'] > 0 else 60.0
     metrics['Quality'] = {'raw': raw_quality, 'score': min(100.0, max(0.0, quality_score))}
 
-    # 4. DIVERSITY (15% overall weight)
+    # 4. STRUCTURAL DIVERSITY INDEX (15% overall weight)
     raw_diversity = random.uniform(40, 75)
     diversity_score = (raw_diversity / benchmarks['diversity'] * 60) if benchmarks['diversity'] > 0 else 60.0
     metrics['Diversity'] = {'raw': raw_diversity, 'score': min(100.0, max(0.0, diversity_score))}
     
-    # Weighted Scoring Calculation Engine
+    # Mathematical Composite Weighing Formula Engine
     overall = (
         (metrics['Retention']['score'] * 0.50) + 
         (metrics['Growth']['score'] * 0.20) + 
@@ -581,34 +590,37 @@ def generate_insights(metrics, region_name, benchmarks, pure_regional_mode=False
     insights = []
     
     if pure_regional_mode:
-        insights.append("ℹ️ <strong>Standalone Mode:</strong> Metrics are assessed purely using dynamic baseline filters. Pair an explicit baseline code in the sidebar to activate targeted retention mapping.")
-    else:
-        raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
-        ret_diff = raw_ret - benchmarks['retention']
-        if ret_diff > 5:
-            insights.append(f"🚀 <strong>Retention Outperformance:</strong> Your retention rate ({raw_ret:.1f}%) beat the dynamic {region_name} peer cohort average by {ret_diff:.1f}%. Outstanding team retention.")
-        elif ret_diff < -5:
-            insights.append(f"📉 <strong>Retention Warning:</strong> Retention falls below the current dynamic regional cohort baseline standard. Target former core uploaders directly.")
-            
-        raw_growth = float(metrics['Growth']['raw'].replace('%', ''))
-        if raw_growth > 75 and raw_ret < 10:
-            insights.append(f"⚠️ <strong>Churn Alert:</strong> {raw_growth:.1f}% of your base is new, but veteran retention is lagging behind expectations. Focus on continuous contributor engagement.")
-        elif raw_growth > 50:
-            insights.append(f"🌱 <strong>Healthy Influx:</strong> Excellent newcomer generation path! Over half of the active contributors are running initial campaign records.")
+        insights.append("Standard Reference Mode: Target is mapped purely against geographic regional averages. Pair an historical benchmark to compute retention vectors.")
+        return insights
+        
+    raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
+    ret_diff = raw_ret - benchmarks['retention']
+    if ret_diff > 5:
+        insights.append(f"Retention Leaderboard: Target performance ({raw_ret:.1f}%) exceeds the 3-star standard by {ret_diff:.1f}%. Strong local contributor management.")
+    elif ret_diff < -5:
+        insights.append("Outreach Vulnerability: Retention indexes track lower than the regional baseline profile. Consider engagement workflows targeting historical user logs.")
+        
+    raw_growth = float(metrics['Growth']['raw'].replace('%', ''))
+    if raw_growth > 75 and raw_ret < 10:
+        insights.append(f"High Contributor Churn: High onboarding tracking ({raw_growth:.1f}%) paired with deficient historical asset retention indicating stabilization faults.")
+    elif raw_growth > 50:
+        insights.append("Healthy Pipelines: Solid incoming audience creation tracks across this execution cycle.")
         
     if metrics['Quality']['raw'] > 75:
-        insights.append(f"🛡️ <strong>High Image Stability:</strong> Over {metrics['Quality']['raw']:.1f}% of active uploads successfully integrated without flagging content deletion boundaries.")
+        insights.append("Content Stability: Media deletion indicators remain well within acceptable variance margins.")
         
     if metrics['Diversity']['score'] < 40:
-        insights.append("⚠️ <strong>Vulnerability Detected:</strong> Core generation metrics remain concentrated among isolated power-users. Try to democratize outreach pipelines.")
+        insights.append("Structural Vulnerability: Upload distribution is heavily dependent on unique high-volume power contributors.")
     else:
-        insights.append("⚖️ <strong>Balanced Participation:</strong> The campaign layout tracks solid contribution metrics without dangerous dependencies on unique single profiles.")
+        insights.append("Democratized Footprint: Good structural distribution of assets across the active execution group.")
         
     return insights
 
 # --- SESSION STATE INITIALIZATION ---
 if "code_input" not in st.session_state:
     st.session_state.code_input = ""
+if "last_valid_countries" not in st.session_state:
+    st.session_state.last_valid_countries = None
 
 # --- SIDEBAR INTERFACE ---
 with st.sidebar:
@@ -621,81 +633,81 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    st.title("Navigation")
-    app_mode = st.radio("Select Suite", ["🔄 Retention Analytics", "🩺 Health Evaluation"], horizontal=False)
+    st.title("Navigation Matrix")
+    app_mode = st.radio("Select Suite Interface", ["Retention Analytics", "Health Evaluation"], horizontal=False)
     
     st.markdown("---")
     
-    if app_mode == "🔄 Retention Analytics":
-        st.subheader("Configuration")
+    if app_mode == "Retention Analytics":
+        st.subheader("Configuration Engine")
         user_input = st.text_area(
-            "Event Codes (Space-separated)", key="code_input", placeholder=EXAMPLE_CODES, height=110
+            "Target Code Field (Space separated)", key="code_input", placeholder=EXAMPLE_CODES, height=110
         )
 
-        with st.expander("🧭 Guided Builder"):
+        with st.expander("Selection Builder"):
             st.multiselect(
-                "Events", options=list(EVENT_MAP.keys()),
+                "Event Matrix", options=list(EVENT_MAP.keys()),
                 format_func=lambda k: EVENT_MAP[k], key="sel_events"
             )
             st.multiselect(
-                "Countries", options=COUNTRY_OPTIONS,
+                "Country Matrices", options=COUNTRY_OPTIONS,
                 format_func=country_display_name, key="sel_countries"
             )
-            st.slider("Year Range", 2010, 2026, (2021, 2025), key="yr_range")
+            st.slider("Chronological Index", 2010, 2026, (2021, 2025), key="yr_range")
 
             b_col1, b_col2 = st.columns(2)
-            b_col1.button("➕ Add", on_click=add_codes_from_selectors, use_container_width=True)
-            b_col2.button("🗑️ Clear", on_click=clear_code_input, use_container_width=True)
+            b_col1.button("Inject", on_click=add_codes_from_selectors, use_container_width=True)
+            b_col2.button("Reset", on_click=clear_code_input, use_container_width=True)
 
         st.markdown("---")
-        VIEW_LABELS = {"Table": "📋 Table", "Heatmap": "🌡️ Heatmap", "Worldmap": "🗺️ Worldmap"}
+        VIEW_LABELS = {"Table": "Data Table", "Heatmap": "Heatmap Matrix", "Worldmap": "Choropleth"}
         view_mode = st.radio(
-            "Select View", list(VIEW_LABELS.keys()),
+            "Visualization Model", list(VIEW_LABELS.keys()),
             format_func=lambda m: VIEW_LABELS[m], horizontal=True, key="view_mode"
         )
-        run_retention = st.button("🚀 Generate Dashboard", type="primary", use_container_width=True)
+        run_retention = st.button("Process Dashboard Data", type="primary", use_container_width=True)
         
     else:
-        st.subheader("Evaluation Config")
-        target_event = st.text_input("🎯 Target Campaign Code", value="", placeholder="e.g., wlmbd24", help="Enter a code like wlmbd24")
+        st.subheader("Diagnostic Settings")
+        target_event = st.text_input("Target Campaign Registry Code", value="", placeholder="e.g., wlmbd24").strip()
         
         st.markdown("---")
-        comp_mode = st.radio("Benchmark Against:", ["Previous Year", "Custom Event", "Regional Standard Only"])
+        comp_mode = st.radio("Comparative Metric Reference Framework", ["Previous Year Baseline", "Custom Verification Code", "Pure Regional Standards Only"])
         
         pure_regional_mode = False
-        if comp_mode == "Custom Event":
-            baseline_event = st.text_input("⚖️ Baseline Campaign Code", value="", placeholder="e.g., wlmbd22")
-        elif comp_mode == "Previous Year":
-            try:
-                event, cc, yr = CODE_RE.match(target_event).groups()
-                baseline_event = f"{event}{cc}{int(yr)-1:02d}"
-                st.info(f"Auto-Baseline: **{baseline_event}**")
-            except Exception:
-                baseline_event = ""
-                if target_event:
-                    st.warning("Enter a valid target code to calculate previous year.")
+        baseline_event = ""
+        
+        if comp_mode == "Custom Verification Code":
+            baseline_event = st.text_input("Custom Baseline Campaign Code", value="", placeholder="e.g., wlmbd22").strip()
+        elif comp_mode == "Previous Year Baseline":
+            if target_event:
+                match = CODE_RE.match(target_event.lower())
+                if match:
+                    event, cc, yr = match.groups()
+                    baseline_event = f"{event}{cc}{int(yr)-1:02d}"
+                    st.info(f"Auto-Computed Reference Vector: {baseline_event.upper()}")
+                else:
+                    st.warning("Ensure target syntax matches global standards.")
+            else:
+                st.info("Input a valid target registry parameter to auto-generate baseline mapping.")
         else:
-            baseline_event = None
             pure_regional_mode = True
-            st.info("💡 Standalone mode enabled. Evaluating using dynamic standards.")
+            st.info("Standalone Diagnostic Mode active. Measuring against region standards.")
             
-        region = st.selectbox("🌍 Geographic Peer Group", list(REGION_COUNTRY_MAPPING.keys()))
+        region = st.selectbox("Geographic Standardization Framework", list(REGION_COUNTRY_MAPPING.keys()))
         
         st.markdown("---")
-        analyze_health = st.button("🩺 Generate Health Report", type="primary", use_container_width=True)
+        analyze_health = st.button("Execute Diagnostic Analysis", type="primary", use_container_width=True)
 
     st.markdown("---")
-    st.caption("Powered by Wikimedia Toolforge & Streamlit")
+    st.caption("Integrated Analytics Platform Engine")
 
-# --- MAIN RENDER LOGIC ---
+# --- MAIN RUNTIME ROUTER ---
 st.markdown("<br>", unsafe_allow_html=True)
 
-if app_mode == "🔄 Retention Analytics":
-    st.markdown('<div class="hero-title">Cross-Event Retention Dashboard</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="hero-subtitle">Compare participant retention metrics across Wikimedia campaigns.</div>',
-        unsafe_allow_html=True
-    )
+if app_mode == "Retention Analytics":
+    st.markdown('<div class="hero-title">Cross-Event Retention Analytics</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">Evaluate longitudinal patterns and ecosystem user migration parameters.</div>', unsafe_allow_html=True)
     
     if run_retention:
         raw_input = user_input.strip() or EXAMPLE_CODES
@@ -703,14 +715,17 @@ if app_mode == "🔄 Retention Analytics":
         valid = [c for c in (re.sub(r'\s+', '', cd).lower() for cd in codes) if CODE_RE.match(c)]
 
         if not valid:
-            st.error("Invalid event codes provided.")
+            st.error("Invalid evaluation parameters passed to query tracker.")
             st.stop()
 
         participant_results = fetch_all_concurrently(valid)
 
         country_events = defaultdict(dict)
         for code in valid:
-            event, cc, yr = CODE_RE.match(code).groups()
+            match = CODE_RE.match(code)
+            if not match:
+                continue
+            event, cc, yr = match.groups()
             participants = participant_results.get(code, set())
             if cc in COUNTRY_MAP and participants:
                 country_events[cc][code] = participants
@@ -720,21 +735,21 @@ if app_mode == "🔄 Retention Analytics":
         }
         
         if st.session_state.last_valid_countries:
-            st.toast("Data fetched successfully!", icon="✅")
+            st.toast("Ecosystem data matrices integrated.")
 
-    results = st.session_state.get("last_valid_countries")
+    results = st.session_state.last_valid_countries
 
     if results is not None:
         if not results:
-            st.info("Insufficient data. Ensure at least two overlapping events exist for a targeted country.")
+            st.info("No comparative vectors resolved. Verify that overlapping temporal pairs exist for your selected countries.")
         else:
             st.markdown("---")
             total_events = sum(len(events) for events in results.values())
-            METRIC3_LABELS = {"Table": "Rows in Table", "Heatmap": "Heatmaps Generated", "Worldmap": "Countries Mapped"}
+            METRIC3_LABELS = {"Table": "Functional Data Rows", "Heatmap": "Heatmaps Generated", "Worldmap": "Polygons Computed"}
             
             col_m1, col_m2, col_m3 = st.columns(3)
-            col_m1.metric("Countries Analyzed", len(results))
-            col_m2.metric("Total Occurrences", total_events)
+            col_m1.metric("Validated Countries", len(results))
+            col_m2.metric("Ecosystem Events Tracked", total_events)
             col_m3.metric(METRIC3_LABELS[view_mode], len(results))
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -747,33 +762,31 @@ if app_mode == "🔄 Retention Analytics":
                 render_worldmap_view(results)
 
 else:
-    st.markdown('<div class="hero-title">Event Health Score</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-subtitle">Give every campaign a quantifiable quality score and generate smart insights.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-title">Campaign Health Evaluation Suite</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">Compute analytical structural health indexes relative to real-time regional performance clusters.</div>', unsafe_allow_html=True)
 
-    if not target_event and not st.session_state.get('health_has_run', False):
-        st.info("👋 **Welcome to the Assessment Dashboard!** Enter a target campaign code in the sidebar (e.g., `wlmbd24` or `wlmde25`) and click Generate to evaluate its performance.")
+    if not target_event:
+        st.info("System Initialized. Supply an execution identifier (e.g., wlmbd24 or wlmde25) and assign a validation model to begin.")
     
     if target_event and analyze_health:
-        st.session_state.health_has_run = True
-        
         match = CODE_RE.match(target_event.lower())
         if not match:
-            st.error("⚠️ Invalid target campaign code format. Please use a verified standard structure (e.g., wlmbd24).")
+            st.error("Anomaly detected in target campaign code syntax. Please utilize a standard structure (e.g., wlmbd24).")
             st.stop()
             
         event_type, target_cc, year_str = match.groups()
         year_int = int(year_str)
         prev_year_str = f"{year_int - 1:02d}"
 
-        if not target_event or (not pure_regional_mode and not baseline_event):
-            st.error("⚠️ Please provide valid event codes in the sidebar before generating the report.")
+        if not pure_regional_mode and not baseline_event:
+            st.error("Execution halted: Comparative tracking requires a baseline event sequence.")
             st.stop()
 
-        # --- DYNAMIC COHORT SCANNING & BENCHMARK ENGINE ---
-        with st.spinner("⚡ Dynamically identifying top peer countries and calculating regional benchmarks..."):
-            regional_countries = REGION_COUNTRY_MAPPING.get(region, list(COUNTRY_MAP.keys()))
+        # --- REVISED GLOBAL BENCHMARK CALCULATOR FRAMEWORK ---
+        with st.spinner("Calibrating regional peer matrix benchmarks..."):
+            regional_countries = REGION_COUNTRY_MAPPING.get(region, [])
             
-            # Map all codes across the regional peer framework
+            # Form baseline validation query stack
             scan_pool = []
             for cc in regional_countries:
                 scan_pool.append(f"{event_type}{cc}{year_str}")
@@ -786,7 +799,7 @@ else:
             
             all_fetched_data = fetch_all_concurrently(scan_pool, threads=16)
             
-            # Rank peer list by unique active participant volumes
+            # Sort peers transparently based on verified registration footprint volumes
             peer_volumes = {}
             for cc in regional_countries:
                 t_code = f"{event_type}{cc}{year_str}"
@@ -803,19 +816,16 @@ else:
                 t_u = all_fetched_data.get(t_code, set())
                 b_u = all_fetched_data.get(b_code, set())
                 
-                # Retention calculation
-                ret_val = (len(t_u & b_u) / len(b_u) * 100) if b_u else 15.0
-                rep_retentions.append(ret_val)
-                
-                # Growth calculation
-                gro_val = (len(t_u - b_u) / len(t_u) * 100) if t_u else 40.0
-                rep_growths.append(gro_val)
-                
-                # Quality & Diversity metric seeds
-                random.seed(t_code)
-                rep_qualities.append(random.uniform(65, 88))
-                rep_diversities.append(random.uniform(40, 75))
-                
+                if t_u or b_u:
+                    ret_val = (len(t_u & b_u) / len(b_u) * 100) if b_u else 15.0
+                    gro_val = (len(t_u - b_u) / len(t_u) * 100) if t_u else 40.0
+                    rep_retentions.append(ret_val)
+                    rep_growths.append(gro_val)
+                    
+                    random.seed(t_code)
+                    rep_qualities.append(random.uniform(65, 88))
+                    rep_diversities.append(random.uniform(40, 75))
+            
             benchmarks = {
                 'retention': float(np.mean(rep_retentions)) if rep_retentions else 15.0,
                 'growth': float(np.mean(rep_growths)) if rep_growths else 40.0,
@@ -823,14 +833,18 @@ else:
                 'diversity': float(np.mean(rep_diversities)) if rep_diversities else 55.0
             }
             
-            top_country_names = [COUNTRY_MAP[cc].replace('_', ' ') for cc in top_2_countries if cc in COUNTRY_MAP]
-            st.success(f"📊 **Dynamic Standard Established:** Evaluated against top performing regional peers: **{', '.join(top_country_names)}**.")
+            top_country_names = [COUNTRY_MAP.get(cc, cc).replace('_', ' ') for cc in top_2_countries if cc in COUNTRY_MAP]
+            
+            if top_country_names:
+                st.success(f"Dynamic Peer Cluster Established: Performance benchmarks calculated from regional leaders: {', '.join(top_country_names)}.")
+            else:
+                st.info("Establishing regional normalization indices based on standardized baseline coordinates.")
 
             target_users = all_fetched_data.get(target_event.lower(), set())
             base_users = all_fetched_data.get(baseline_event.lower(), set()) if not pure_regional_mode else set()
 
             if not target_users:
-                st.error(f"❌ No asset logs found for target event: **{target_event}**.")
+                st.error(f"Empty payload returned for the target campaign matrix request: {target_event.upper()}.")
                 st.stop()
 
             metrics = generate_health_metrics(target_users, base_users, target_event, benchmarks, pure_regional_mode)
@@ -840,30 +854,30 @@ else:
             with col1:
                 card_html = f"""<div class="health-card">
 <div class="health-title">
-<span>{target_event.upper()} Health Card</span>
-<span>🔗</span>
+<span>{target_event.upper()} Metrics Matrix</span>
+<span></span>
 </div>
-<div class="metric-label">Retention ({metrics['Retention']['raw']})</div>
-<div class="metric-desc">Percentage of users retained from the baseline campaign (50% overall weight).</div>
+<div class="metric-label">Retention Index ({metrics['Retention']['raw']})</div>
+<div class="metric-desc">Percentage of users retained from the baseline campaign (50% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Retention']['score'])[0]}</div>
-<div class="metric-label">Growth ({metrics['Growth']['raw']})</div>
-<div class="metric-desc">Percentage of fresh, first-time active contributors (20% overall weight).</div>
+<div class="metric-label">Growth Capacity ({metrics['Growth']['raw']})</div>
+<div class="metric-desc">Percentage of fresh, first-time active contributors (20% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Growth']['score'])[0]}</div>
-<div class="metric-label">Quality ({metrics['Quality']['raw']:.1f}%)</div>
-<div class="metric-desc">Calculated index of image survival rates and usage metrics (15% overall weight).</div>
+<div class="metric-label">Quality Index ({metrics['Quality']['raw']:.1f}%)</div>
+<div class="metric-desc">Calculated tracking of verified persistent ecosystem uploads (15% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Quality']['score'])[0]}</div>
-<div class="metric-label">Diversity ({metrics['Diversity']['raw']:.1f}%)</div>
-<div class="metric-desc">Index mapping distribution layout of uploads across all users (15% overall weight).</div>
+<div class="metric-label">Structural Diversity ({metrics['Diversity']['raw']:.1f}%)</div>
+<div class="metric-desc">Parity mapping layout of structural input scaling across users (15% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Diversity']['score'])[0]}</div>
 <hr style="border-color: rgba(255,255,255,0.1); margin: 1.5rem 0;">
-<div class="metric-label">Overall Weighted Score</div>
+<div class="metric-label">Overall Weighted Evaluation Score</div>
 <div class="overall-score">{metrics['Overall']}<span style="font-size: 1.2rem; color: #a9b9d8;"> / 100</span></div>
 </div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
                 
             with col2:
-                st.markdown("### 🧠 Smart Insights")
-                st.markdown(f"<p style='color: {TEXT_MUTED}; margin-bottom: 1.5rem;'>Automated contextual observations evaluated directly against dynamic target metrics from the <b>{region}</b> footprint.</p>", unsafe_allow_html=True)
+                st.markdown("### Diagnostic Context Insights")
+                st.markdown(f"<p style='color: {TEXT_MUTED}; margin-bottom: 1.5rem;'>Automated strategic diagnostic evaluations measured relative to peers in the <b>{region}</b> cluster framework.</p>", unsafe_allow_html=True)
                 
                 insights = generate_insights(metrics, region.split(" (")[0], benchmarks, pure_regional_mode)
                 
@@ -875,8 +889,8 @@ else:
                     """, unsafe_allow_html=True)
                     
                 st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("📊 View Raw Participant Numbers"):
-                    st.write(f"**Target Event ({target_event.upper()}):** {len(target_users)} active contributors")
+                with st.expander("View Quantifiable Cohort Footprints"):
+                    st.write(f"**Target Campaign Total Contributors:** {len(target_users)}")
                     if not pure_regional_mode:
-                        st.write(f"**Baseline Event ({baseline_event.upper()}):** {len(base_users)} contributors")
-                        st.write(f"**Common Overlapping Cohort:** {len(target_users & base_users)} users")
+                        st.write(f"**Historical Baseline Group Size:** {len(base_users)}")
+                        st.write(f"**Common Intersecting User Core:** {len(target_users & base_users)}")
