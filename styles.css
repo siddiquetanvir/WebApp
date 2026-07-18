@@ -1,0 +1,216 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.stApp {
+    background: radial-gradient(circle at 10% -10%, __BG_MID__ 0%, __BG_DEEP__ 55%, #060d1a 100%) !important;
+}
+.stApp, .stApp p, .stApp li, .stApp label {
+    color: __TEXT_LIGHT__ !important;
+}
+div[data-testid="stMarkdownContainer"] p {
+    color: __TEXT_MUTED__ !important;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(165deg, #0d1c33 0%, __WIKI_BLUE_DARK__ 65%, __WIKI_BLUE__ 100%) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+section[data-testid="stSidebar"] * {
+    color: #f5f8ff !important;
+}
+section[data-testid="stSidebar"] img {
+    object-fit: contain !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+}
+section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small {
+    color: #cdd9f2 !important;
+}
+section[data-testid="stSidebar"] textarea, section[data-testid="stSidebar"] input {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 10px !important;
+    color: #ffffff !important;
+}
+section[data-testid="stSidebar"] textarea::placeholder, section[data-testid="stSidebar"] input::placeholder {
+    color: rgba(255, 255, 255, 0.45) !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+}
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    border-radius: 8px !important;
+}
+section[data-testid="stSidebar"] span[data-baseweb="tag"] {
+    background: __WIKI_BLUE__ !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(90deg, __WIKI_BLUE__ 0%, __WIKI_BLUE_DARK__ 100%);
+    color: white !important;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 0.6em 1em;
+    box-shadow: 0 4px 14px rgba(51, 102, 204, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(51, 102, 204, 0.45);
+    color: white !important;
+}
+.stButton > button p {
+    color: white !important;
+}
+div[data-testid="stDownloadButton"] > button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    font-weight: 600;
+}
+div[data-testid="stDownloadButton"] > button p {
+    color: __TEXT_LIGHT__ !important;
+}
+
+/* Typography & Display Layouts */
+.hero-title {
+    font-size: 2.6rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.15;
+    margin: 0.4rem 0 0.15rem 0;
+    background: linear-gradient(90deg, __WIKI_BLUE_LIGHT__ 0%, __WIKI_BLUE__ 55%, #9b8cff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero-subtitle {
+    color: __TEXT_MUTED__ !important;
+    font-size: 1.05rem;
+    margin-bottom: 1.1rem;
+}
+
+/* Radio Selectors */
+div[data-testid="stRadio"] > div {
+    gap: 0.5rem;
+}
+div[data-testid="stRadio"] label {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    transition: all 0.15s ease;
+}
+div[data-testid="stRadio"] label:hover {
+    border-color: __WIKI_BLUE_LIGHT__;
+}
+div[data-testid="stRadio"] label:has(input:checked) {
+    background: linear-gradient(90deg, __WIKI_BLUE__ 0%, __WIKI_BLUE_DARK__ 100%);
+    border-color: transparent;
+}
+div[data-testid="stRadio"] label:has(input:checked) p {
+    color: white !important;
+    font-weight: 700;
+}
+
+/* Data Visualization Elements */
+div[data-testid="stMetric"] {
+    background: __CARD_LIGHT__;
+    border: 1px solid rgba(20, 66, 142, 0.12);
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+div[data-testid="stMetricLabel"] p {
+    color: __WIKI_GRAY__ !important;
+    font-weight: 600;
+}
+div[data-testid="stMetricValue"] {
+    color: __WIKI_BLUE_DARK__ !important;
+    font-weight: 800;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: __CARD_LIGHT__;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+    padding: 0.6rem;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] * {
+    color: __WIKI_INK__ !important;
+}
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    overflow: hidden;
+}
+hr {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Health Score Layout Cards */
+.health-card {
+    background: __CARD_DARK__;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 2.5rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.health-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #ffffff !important;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 1rem;
+}
+.metric-label {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: __TEXT_LIGHT__ !important;
+    margin-bottom: 0.2rem;
+    margin-top: 1rem;
+}
+.metric-desc {
+    font-size: 0.85rem;
+    color: __TEXT_MUTED__ !important;
+    margin-bottom: 0.4rem;
+}
+.stars {
+    color: #ffc107 !important;
+    font-size: 1.3rem;
+    letter-spacing: 3px;
+    margin-bottom: 0.5rem;
+}
+.overall-score {
+    font-size: 2.8rem;
+    font-weight: 800;
+    color: #ffffff !important;
+    margin-top: 0.5rem;
+}
+.insight-box {
+    border-left: 4px solid __WIKI_BLUE_LIGHT__;
+    background: rgba(122, 167, 255, 0.05);
+    padding: 1.2rem 1.5rem;
+    border-radius: 0 10px 10px 0;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.insight-box p {
+    margin: 0 !important;
+    color: #ffffff !important;
+    font-weight: 500;
+    line-height: 1.5;
+}
