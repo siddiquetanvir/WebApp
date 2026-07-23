@@ -1,5 +1,3 @@
-[https://wikistats.streamlit.app/](https://wikistats.streamlit.app/)
-
 # Wikimedia Campaign Suite
 
 The **Wikimedia Campaign Suite** is an advanced analytics platform engineered to monitor, evaluate, and benchmark community participation across international Wikimedia photo competitions (such as *Wiki Loves Monuments*, *Wiki Loves Earth*, and *Wiki Loves Folklore*). By aggregating live log data from Wikimedia Toolforge, the application delivers actionable data visualizations and automated health assessments for community organizers and program evaluators.
