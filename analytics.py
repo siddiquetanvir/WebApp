@@ -66,6 +66,9 @@ WIKI_CMAP = LinearSegmentedColormap.from_list(
 )
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+COMMONS_HEADERS = {
+    "User-Agent": "WikimediaCampaignSuite/1.0 (https://github.com/siddiquetanvir/WebApp)"
+}
 DELETION_CATEGORY_KEYWORDS = (
     "deletion request",
     "proposed deletion",
@@ -121,25 +124,55 @@ def get_participants(code):
 
 
 def _fetch_category_file_records(category):
-    files = []
-    params = {
-        "action": "query",
-        "format": "json",
-        "generator": "categorymembers",
-        "gcmtitle": f"Category:{category}",
-        "gcmtype": "file",
-        "gcmlimit": "max",
-        "prop": "imageinfo|categories",
-        "iiprop": "user",
-        "iilimit": "1",
-        "cllimit": "max",
-        "clshow": "!hidden",
-    }
-
-    while True:
-        response = requests.get(COMMONS_API, params=params, timeout=20)
+    def _commons_query(params):
+        response = requests.get(COMMONS_API, params=params, headers=COMMONS_HEADERS, timeout=20)
+        response.raise_for_status()
         payload = response.json()
+        if "error" in payload:
+            raise RuntimeError(payload["error"].get("info", "Commons API error"))
+        return payload
+
+    def _list_category_files():
+        file_titles = []
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "categorymembers",
+            "cmtitle": f"Category:{category}",
+            "cmtype": "file",
+            "cmlimit": "max",
+        }
+
+        while True:
+            payload = _commons_query(params)
+            members = payload.get("query", {}).get("categorymembers", [])
+            file_titles.extend(
+                member["title"]
+                for member in members
+                if member.get("title")
+            )
+
+            continuation = payload.get("continue")
+            if not continuation:
+                break
+            params.update(continuation)
+
+        return file_titles
+
+    def _fetch_file_batch(batch_titles):
+        params = {
+            "action": "query",
+            "format": "json",
+            "prop": "imageinfo|categories",
+            "titles": "|".join(batch_titles),
+            "iiprop": "user",
+            "iilimit": "1",
+            "cllimit": "max",
+        }
+
+        payload = _commons_query(params)
         pages = payload.get("query", {}).get("pages", {})
+        batch_records = []
 
         for page in pages.values():
             imageinfo = page.get("imageinfo", [])
@@ -150,15 +183,18 @@ def _fetch_category_file_records(category):
                 for category_name in categories
                 for keyword in DELETION_CATEGORY_KEYWORDS
             )
-            files.append({
+            batch_records.append({
                 "uploader": uploader,
                 "flagged_for_deletion": flagged_for_deletion,
             })
 
-        continuation = payload.get("continue")
-        if not continuation:
-            break
-        params.update(continuation)
+        return batch_records
+
+    file_titles = _list_category_files()
+    files = []
+    batch_size = 50
+    for start_idx in range(0, len(file_titles), batch_size):
+        files.extend(_fetch_file_batch(file_titles[start_idx:start_idx + batch_size]))
 
     return files
 
