@@ -1,8 +1,8 @@
 import re
-import random
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import permutations
+from math import ceil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -65,27 +65,45 @@ WIKI_CMAP = LinearSegmentedColormap.from_list(
     "wiki_blue", [CARD_LIGHT, "#bcd4f7", WIKI_BLUE, WIKI_BLUE_DARK, "#0b2b5c"]
 )
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+DELETION_CATEGORY_KEYWORDS = (
+    "deletion request",
+    "proposed deletion",
+    "speedy deletion",
+    "deletion requests",
+    "candidates for speedy deletion",
+)
 
 
 def country_display_name(cc):
     return COUNTRY_MAP.get(cc, cc).replace('_', ' ')
 
 
+def code_to_category(code):
+    code = re.sub(r'\s+', '', code).lower()
+    match = CODE_RE.match(code)
+    if not match:
+        return None
+    event, cc, yr = match.groups()
+    category = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
+    if cc and event != 'wlb':
+        country_label = COUNTRY_MAP.get(cc)
+        if not country_label:
+            return None
+        category += f"_in_{country_label}"
+    return category
+
+
 # --- DATA ACQUISITION LOGIC ---
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_participants(code):
     try:
-        code = re.sub(r'\s+', '', code).lower()
-        match = CODE_RE.match(code)
-        if not match:
+        category = code_to_category(code)
+        if not category:
             return set()
-        event, cc, yr = match.groups()
-        cat = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
-        if cc and event != 'wlb':
-            cat += f"_in_{COUNTRY_MAP.get(cc, '')}"
 
         response = requests.get(
-            'https://ptools.toolforge.org/uploadersincat.php?category=' + cat, timeout=15
+            'https://ptools.toolforge.org/uploadersincat.php?category=' + category, timeout=15
         )
 
         for uincattxt in response.content.decode("UTF-8").split('fieldset'):
@@ -100,6 +118,105 @@ def get_participants(code):
         return users
     except Exception:
         return set()
+
+
+def _fetch_category_file_records(category):
+    files = []
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "categorymembers",
+        "gcmtitle": f"Category:{category}",
+        "gcmtype": "file",
+        "gcmlimit": "max",
+        "prop": "imageinfo|categories",
+        "iiprop": "user",
+        "iilimit": "1",
+        "cllimit": "max",
+        "clshow": "!hidden",
+    }
+
+    while True:
+        response = requests.get(COMMONS_API, params=params, timeout=20)
+        payload = response.json()
+        pages = payload.get("query", {}).get("pages", {})
+
+        for page in pages.values():
+            imageinfo = page.get("imageinfo", [])
+            uploader = imageinfo[0].get("user") if imageinfo else None
+            categories = [cat.get("title", "").lower() for cat in page.get("categories", [])]
+            flagged_for_deletion = any(
+                keyword in category_name
+                for category_name in categories
+                for keyword in DELETION_CATEGORY_KEYWORDS
+            )
+            files.append({
+                "uploader": uploader,
+                "flagged_for_deletion": flagged_for_deletion,
+            })
+
+        continuation = payload.get("continue")
+        if not continuation:
+            break
+        params.update(continuation)
+
+    return files
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_campaign_structural_metrics(code):
+    category = code_to_category(code)
+    if not category:
+        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    try:
+        file_records = _fetch_category_file_records(category)
+    except Exception:
+        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    total_uploads = len(file_records)
+    if total_uploads == 0:
+        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    flagged_count = sum(1 for file_record in file_records if file_record["flagged_for_deletion"])
+    deletion_rate = (flagged_count / total_uploads) * 100
+
+    uploader_counts = defaultdict(int)
+    for file_record in file_records:
+        uploader = file_record["uploader"]
+        if uploader:
+            uploader_counts[uploader] += 1
+
+    if uploader_counts:
+        top_uploader_count = max(1, ceil(len(uploader_counts) * 0.10))
+        top_uploads = sum(sorted(uploader_counts.values(), reverse=True)[:top_uploader_count])
+        top10_uploader_share = (top_uploads / total_uploads) * 100
+    else:
+        top10_uploader_share = 100.0
+
+    return {
+        "deletion_rate": deletion_rate,
+        "top10_uploader_share": top10_uploader_share,
+        "total_uploads": total_uploads,
+    }
+
+
+def fetch_structural_metrics_concurrently(codes, threads=8):
+    results = {}
+    total = len(codes)
+    if total == 0:
+        return results
+
+    with ThreadPoolExecutor(max_workers=min(threads, max(1, total))) as executor:
+        future_to_code = {executor.submit(get_campaign_structural_metrics, code): code for code in codes}
+        for future in as_completed(future_to_code):
+            code = future_to_code[future]
+            try:
+                results[code] = future.result()
+            except Exception:
+                results[code] = {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    return results
 
 
 def fetch_all_concurrently(codes, threads=16):
@@ -318,7 +435,13 @@ def calculate_stars(score, max_score=100):
     return "★" * stars + "☆" * (5 - stars), stars
 
 
-def generate_health_metrics(target_users, baseline_users, target_code, benchmarks, pure_regional_mode=False):
+def generate_health_metrics(
+    target_users,
+    baseline_users,
+    target_structural_metrics,
+    benchmarks,
+    pure_regional_mode=False
+):
     metrics = {}
 
     # 1. RETENTION VECTOR (50% overall weight)
@@ -345,15 +468,26 @@ def generate_health_metrics(target_users, baseline_users, target_code, benchmark
         growth_score = (growth_rate / benchmarks['growth'] * 60) if benchmarks['growth'] > 0 else 60.0
         metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100.0, max(0.0, growth_score))}
 
-    # 3. QUALITY PARAMETER INDEX (15% overall weight)
-    random.seed(target_code)
-    raw_quality = random.uniform(65, 88)
-    quality_score = (raw_quality / benchmarks['quality'] * 60) if benchmarks['quality'] > 0 else 60.0
+    # 3. QUALITY PARAMETER INDEX (15% overall weight, lower deletion is better)
+    raw_quality = float(target_structural_metrics.get("deletion_rate", 0.0))
+    quality_baseline = float(benchmarks.get('quality', 0.0))
+    if raw_quality <= 0:
+        quality_score = 100.0 if quality_baseline >= 0 else 60.0
+    elif quality_baseline <= 0:
+        quality_score = 0.0
+    else:
+        quality_score = (quality_baseline / raw_quality) * 60
     metrics['Quality'] = {'raw': raw_quality, 'score': min(100.0, max(0.0, quality_score))}
 
-    # 4. STRUCTURAL DIVERSITY INDEX (15% overall weight)
-    raw_diversity = random.uniform(40, 75)
-    diversity_score = (raw_diversity / benchmarks['diversity'] * 60) if benchmarks['diversity'] > 0 else 60.0
+    # 4. STRUCTURAL DIVERSITY INDEX (15% overall weight, lower concentration is better)
+    raw_diversity = float(target_structural_metrics.get("top10_uploader_share", 100.0))
+    diversity_baseline = float(benchmarks.get('diversity', 0.0))
+    if raw_diversity <= 0:
+        diversity_score = 100.0 if diversity_baseline >= 0 else 60.0
+    elif diversity_baseline <= 0:
+        diversity_score = 0.0
+    else:
+        diversity_score = (diversity_baseline / raw_diversity) * 60
     metrics['Diversity'] = {'raw': raw_diversity, 'score': min(100.0, max(0.0, diversity_score))}
 
     overall = (
@@ -387,12 +521,14 @@ def generate_insights(metrics, region_name, benchmarks, pure_regional_mode=False
     elif raw_growth > 50:
         insights.append("Healthy Pipelines: Solid incoming audience creation tracks across this execution cycle.")
 
-    if metrics['Quality']['raw'] > 75:
-        insights.append("Content Stability: Media deletion indicators remain well within acceptable variance margins.")
+    if metrics['Quality']['score'] >= 70:
+        insights.append("Content Stability: Deletion-risk indicators are below the regional benchmark profile.")
+    elif metrics['Quality']['score'] < 40:
+        insights.append("Content Risk: Deletion-risk indicators are above the regional benchmark profile.")
 
     if metrics['Diversity']['score'] < 40:
-        insights.append("Structural Vulnerability: Upload distribution is heavily dependent on unique high-volume power contributors.")
+        insights.append("Structural Vulnerability: Upload distribution is concentrated in a small high-volume contributor segment.")
     else:
-        insights.append("Democratized Footprint: Good structural distribution of assets across the active execution group.")
+        insights.append("Democratized Footprint: Upload distribution is comparatively balanced across contributors.")
 
     return insights

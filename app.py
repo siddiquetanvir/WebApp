@@ -1,5 +1,4 @@
 import re
-import random
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
@@ -22,6 +21,7 @@ from analytics import (
     create_worldmap,
     country_display_name,
     fetch_all_concurrently,
+    fetch_structural_metrics_concurrently,
     generate_health_metrics,
     generate_insights,
     get_participants,
@@ -266,34 +266,37 @@ else:
                 peer_volumes[cc] = len(all_fetched_data.get(t_code, set()))
                 
             sorted_peers = sorted(peer_volumes.items(), key=lambda x: x[1], reverse=True)
-            top_2_countries = [peer[0] for peer in sorted_peers[:2]]
+            top_3_countries = [peer[0] for peer in sorted_peers[:3]]
+
+            structural_codes = [f"{event_type}{cc}{year_str}" for cc in top_3_countries]
+            structural_codes.append(target_event.lower())
+            structural_metrics = fetch_structural_metrics_concurrently(list(set(structural_codes)))
             
-            # Extract metrics across top 2 volume drivers
+            # Extract metrics across top 3 volume drivers
             rep_retentions, rep_growths, rep_qualities, rep_diversities = [], [], [], []
-            for cc in top_2_countries:
+            for cc in top_3_countries:
                 t_code = f"{event_type}{cc}{year_str}"
                 b_code = f"{event_type}{cc}{prev_year_str}"
                 t_u = all_fetched_data.get(t_code, set())
                 b_u = all_fetched_data.get(b_code, set())
+                structural = structural_metrics.get(t_code, {})
                 
                 if t_u or b_u:
                     ret_val = (len(t_u & b_u) / len(b_u) * 100) if b_u else 15.0
                     gro_val = (len(t_u - b_u) / len(t_u) * 100) if t_u else 40.0
                     rep_retentions.append(ret_val)
                     rep_growths.append(gro_val)
-                    
-                    random.seed(t_code)
-                    rep_qualities.append(random.uniform(65, 88))
-                    rep_diversities.append(random.uniform(40, 75))
+                rep_qualities.append(float(structural.get("deletion_rate", 0.0)))
+                rep_diversities.append(float(structural.get("top10_uploader_share", 100.0)))
             
             benchmarks = {
                 'retention': float(np.mean(rep_retentions)) if rep_retentions else 15.0,
                 'growth': float(np.mean(rep_growths)) if rep_growths else 40.0,
-                'quality': float(np.mean(rep_qualities)) if rep_qualities else 75.0,
-                'diversity': float(np.mean(rep_diversities)) if rep_diversities else 55.0
+                'quality': float(np.mean(rep_qualities)) if rep_qualities else 0.0,
+                'diversity': float(np.mean(rep_diversities)) if rep_diversities else 100.0
             }
             
-            top_country_names = [COUNTRY_MAP.get(cc, cc).replace('_', ' ') for cc in top_2_countries if cc in COUNTRY_MAP]
+            top_country_names = [COUNTRY_MAP.get(cc, cc).replace('_', ' ') for cc in top_3_countries if cc in COUNTRY_MAP]
             
             if top_country_names:
                 st.success(f"Dynamic Peer Cluster Established: Performance benchmarks calculated from regional leaders: {', '.join(top_country_names)}.")
@@ -302,12 +305,22 @@ else:
 
             target_users = all_fetched_data.get(target_event.lower(), set())
             base_users = all_fetched_data.get(baseline_event.lower(), set()) if not pure_regional_mode else set()
+            target_structural_metrics = structural_metrics.get(
+                target_event.lower(),
+                {"deletion_rate": 0.0, "top10_uploader_share": 100.0, "total_uploads": 0}
+            )
 
             if not target_users:
                 st.error(f"Empty payload returned for the target campaign matrix request: {target_event.upper()}.")
                 st.stop()
 
-            metrics = generate_health_metrics(target_users, base_users, target_event, benchmarks, pure_regional_mode)
+            metrics = generate_health_metrics(
+                target_users,
+                base_users,
+                target_structural_metrics,
+                benchmarks,
+                pure_regional_mode
+            )
             
             col1, col2 = st.columns([1, 1.2], gap="large")
             
@@ -323,11 +336,11 @@ else:
 <div class="metric-label">Growth Capacity ({metrics['Growth']['raw']})</div>
 <div class="metric-desc">Percentage of fresh, first-time active contributors (20% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Growth']['score'])[0]}</div>
-<div class="metric-label">Quality Index ({metrics['Quality']['raw']:.1f}%)</div>
-<div class="metric-desc">Calculated tracking of verified persistent ecosystem uploads (15% score weight).</div>
+<div class="metric-label">Deletion Rate ({metrics['Quality']['raw']:.1f}%)</div>
+<div class="metric-desc">Share of campaign uploads currently carrying deletion-risk signals (lower is better, 15% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Quality']['score'])[0]}</div>
-<div class="metric-label">Structural Diversity ({metrics['Diversity']['raw']:.1f}%)</div>
-<div class="metric-desc">Parity mapping layout of structural input scaling across users (15% score weight).</div>
+<div class="metric-label">Top 10% Uploader Share ({metrics['Diversity']['raw']:.1f}%)</div>
+<div class="metric-desc">Percentage of uploads produced by the top 10% uploaders (lower is better, 15% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Diversity']['score'])[0]}</div>
 <hr style="border-color: rgba(255,255,255,0.1); margin: 1.5rem 0;">
 <div class="metric-label">Overall Weighted Evaluation Score</div>
