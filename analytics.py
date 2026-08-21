@@ -76,6 +76,13 @@ DELETION_CATEGORY_KEYWORDS = (
     "deletion requests",
     "candidates for speedy deletion",
 )
+DELETION_CATEGORY_TITLES = (
+    "Category:Deletion requests",
+    "Category:Commons deletion requests",
+    "Category:Proposed deletion",
+    "Category:Speedy deletion",
+    "Category:Candidates for speedy deletion",
+)
 
 
 def country_display_name(cc):
@@ -132,47 +139,24 @@ def _fetch_category_file_records(category):
             raise RuntimeError(payload["error"].get("info", "Commons API error"))
         return payload
 
-    def _list_category_files():
-        file_titles = []
-        params = {
-            "action": "query",
-            "format": "json",
-            "list": "categorymembers",
-            "cmtitle": f"Category:{category}",
-            "cmtype": "file",
-            "cmlimit": "max",
-        }
+    files = []
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "categorymembers",
+        "gcmtitle": f"Category:{category}",
+        "gcmtype": "file",
+        "gcmlimit": "max",
+        "prop": "imageinfo|categories",
+        "iiprop": "user",
+        "iilimit": "1",
+        "cllimit": "max",
+        "clcategories": "|".join(DELETION_CATEGORY_TITLES),
+    }
 
-        while True:
-            payload = _commons_query(params)
-            members = payload.get("query", {}).get("categorymembers", [])
-            file_titles.extend(
-                member["title"]
-                for member in members
-                if member.get("title")
-            )
-
-            continuation = payload.get("continue")
-            if not continuation:
-                break
-            params.update(continuation)
-
-        return file_titles
-
-    def _fetch_file_batch(batch_titles):
-        params = {
-            "action": "query",
-            "format": "json",
-            "prop": "imageinfo|categories",
-            "titles": "|".join(batch_titles),
-            "iiprop": "user",
-            "iilimit": "1",
-            "cllimit": "max",
-        }
-
+    while True:
         payload = _commons_query(params)
         pages = payload.get("query", {}).get("pages", {})
-        batch_records = []
 
         for page in pages.values():
             imageinfo = page.get("imageinfo", [])
@@ -183,18 +167,15 @@ def _fetch_category_file_records(category):
                 for category_name in categories
                 for keyword in DELETION_CATEGORY_KEYWORDS
             )
-            batch_records.append({
+            files.append({
                 "uploader": uploader,
                 "flagged_for_deletion": flagged_for_deletion,
             })
 
-        return batch_records
-
-    file_titles = _list_category_files()
-    files = []
-    batch_size = 50
-    for start_idx in range(0, len(file_titles), batch_size):
-        files.extend(_fetch_file_batch(file_titles[start_idx:start_idx + batch_size]))
+        continuation = payload.get("continue")
+        if not continuation:
+            break
+        params.update(continuation)
 
     return files
 
