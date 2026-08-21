@@ -25,7 +25,7 @@ Campaign codes are parsed using a regex pattern:
 Invalid patterns are filtered before analysis.
 
 ### 3.2 Data Acquisition
-Contributor sets are fetched from Toolforge (`uploadersincat.php`) by constructing category names from event metadata. Fetching is parallelized with `ThreadPoolExecutor` to reduce latency for multi-code analysis.
+Contributor sets are fetched from Toolforge (`uploadersincat.php`) by constructing category names from event metadata. For structural campaign metrics, file-level metadata is additionally queried from Wikimedia Commons API category members. Fetching is parallelized with `ThreadPoolExecutor` to reduce latency for multi-code analysis.
 
 ### 3.3 Caching Strategy
 The `get_participants` function uses Streamlit cache (`ttl=3600`), reducing repeated requests and improving responsiveness for recurring queries.
@@ -46,12 +46,12 @@ Outputs include:
 The module computes a weighted composite score (0–100) from four dimensions:
 - Retention (50%)
 - Growth (20%)
-- Quality (15%)
-- Diversity (15%)
+- Quality: deletion-rate signal (15%)
+- Diversity: upload concentration, measured as upload share from the top 10% uploaders (15%)
 
 Regional baseline benchmarking is dynamically estimated by:
 1. Selecting countries in a chosen region.
-2. Identifying top two countries by participant footprint.
+2. Identifying top three countries by participant footprint.
 3. Averaging their metric values to define the 3-star baseline anchor.
 
 The app then scales campaign metrics relative to this baseline and converts them into star ratings and explanatory insights.
@@ -65,19 +65,21 @@ The app then scales campaign metrics relative to this baseline and converts them
 ## 6. Methodological Limitations
 - **External dependency risk**: data availability and format are tied to Toolforge endpoint behavior.
 - **Regex-constrained input model**: only predefined event code patterns are accepted.
-- **Synthetic proxy metrics**: quality and diversity values are generated from seeded random ranges, not measured from direct content-quality metadata.
-- **Potential baseline volatility**: top-two peer selection may shift significantly with small participant count changes.
+- **Proxy nature of quality signal**: deletion-risk categorization is an operational proxy and may not fully capture long-term media quality.
+- **Concentration simplification**: top-10% uploader share captures contributor concentration but not thematic, geographic, or temporal diversity dimensions.
+- **Potential baseline volatility**: top-three peer selection may shift with participant count changes.
 - **No explicit uncertainty intervals** around reported metrics.
 
 ## 7. Validity and Reliability Considerations
 - Retention and growth estimates are directly derived from observed participant sets and are computationally traceable.
-- Health score interpretation should be treated as a comparative heuristic due to synthetic sub-metrics (quality/diversity) and adaptive baseline calibration.
+- Deletion-rate and uploader-concentration metrics are derived from observed campaign file/user records and improve empirical grounding of the health model.
+- Health score interpretation should still be treated as a comparative heuristic due to adaptive baseline calibration and proxy-based structural indicators.
 
 ## 8. Recommendations for Next Iteration
-- Replace proxy quality/diversity values with empirical indicators (e.g., deletion ratios, uploader concentration indices, survival rates over time).
+- Extend structural indicators with additional empirical dimensions (e.g., 30/90-day survival rates, in-use rates, concentration inequality indices such as Gini/Herfindahl).
 - Add statistical confidence reporting and sensitivity analysis for benchmark selection.
 - Introduce audit logs for fetched campaign snapshots to support reproducibility over time.
 - Expand validation with ground-truth evaluations from historical campaign outcomes.
 
 ## 9. Conclusion
-The Wikimedia Campaign Suite provides a practical and technically coherent analytical platform for campaign monitoring, especially for retention and regional comparative evaluation. Its retention engine is methodologically clear, while the health module is operationally useful but partially heuristic. With empirical quality/diversity metrics and uncertainty-aware benchmarking, it can evolve into a stronger scientific-grade evaluation framework.
+The Wikimedia Campaign Suite provides a practical and technically coherent analytical platform for campaign monitoring, especially for retention and regional comparative evaluation. Its retention engine is methodologically clear, and the health module now incorporates observable structural indicators (deletion-rate and uploader concentration) benchmarked against top regional performers. With broader structural indicators and uncertainty-aware benchmarking, it can evolve into a stronger scientific-grade evaluation framework.

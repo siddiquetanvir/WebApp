@@ -337,10 +337,10 @@ else:
 <div class="metric-desc">Percentage of fresh, first-time active contributors (20% score weight).</div>
 <div class="stars">{calculate_stars(metrics['Growth']['score'])[0]}</div>
 <div class="metric-label">Deletion Rate ({metrics['Quality']['raw']:.1f}%)</div>
-<div class="metric-desc">Share of campaign uploads currently carrying deletion-risk signals (lower is better, 15% score weight).</div>
+<div class="metric-desc">15% score weight.</div>
 <div class="stars">{calculate_stars(metrics['Quality']['score'])[0]}</div>
 <div class="metric-label">Top 10% Uploader Share ({metrics['Diversity']['raw']:.1f}%)</div>
-<div class="metric-desc">Percentage of uploads produced by the top 10% uploaders (lower is better, 15% score weight).</div>
+<div class="metric-desc">15% score weight.</div>
 <div class="stars">{calculate_stars(metrics['Diversity']['score'])[0]}</div>
 <hr style="border-color: rgba(255,255,255,0.1); margin: 1.5rem 0;">
 <div class="metric-label">Overall Weighted Evaluation Score</div>
