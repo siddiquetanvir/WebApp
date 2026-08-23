@@ -1,8 +1,9 @@
+import io
 import re
-import random
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import permutations
+from math import ceil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -65,27 +66,49 @@ WIKI_CMAP = LinearSegmentedColormap.from_list(
     "wiki_blue", [CARD_LIGHT, "#bcd4f7", WIKI_BLUE, WIKI_BLUE_DARK, "#0b2b5c"]
 )
 WORLD_SCALE = ["#16233d", "#1f3f73", WIKI_BLUE, WIKI_BLUE_LIGHT, "#cfe0ff"]
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+COMMONS_HEADERS = {
+    "User-Agent": "WikimediaCampaignSuite/1.0 (https://github.com/siddiquetanvir/WebApp)"
+}
+# Commons exposes selected quality images through the category tree (for example,
+# Category:Quality images / Category:Featured pictures). Counting files whose
+# campaign category membership also includes one of these categories is the reliable
+# API-based detection procedure for this metric.
+QUALITY_IMAGE_KEYWORDS = (
+    "quality images",
+    "featured pictures",
+)
 
 
 def country_display_name(cc):
     return COUNTRY_MAP.get(cc, cc).replace('_', ' ')
 
 
+def code_to_category(code):
+    code = re.sub(r'\s+', '', code).lower()
+    match = CODE_RE.match(code)
+    if not match:
+        return None
+    event, cc, yr = match.groups()
+    category = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
+    if cc and event != 'wlb':
+        country_label = COUNTRY_MAP.get(cc)
+        if not country_label:
+            return None
+        category += f"_in_{country_label}"
+    return category
+
+
 # --- DATA ACQUISITION LOGIC ---
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_participants(code):
     try:
-        code = re.sub(r'\s+', '', code).lower()
-        match = CODE_RE.match(code)
-        if not match:
+        category = code_to_category(code)
+        if not category:
             return set()
-        event, cc, yr = match.groups()
-        cat = f"Images_from_Wiki_Loves_{EVENT_MAP[event]}_{2000 + int(yr)}"
-        if cc and event != 'wlb':
-            cat += f"_in_{COUNTRY_MAP.get(cc, '')}"
 
         response = requests.get(
-            'https://ptools.toolforge.org/uploadersincat.php?category=' + cat, timeout=15
+            'https://ptools.toolforge.org/uploadersincat.php?category=' + category, timeout=15
         )
 
         for uincattxt in response.content.decode("UTF-8").split('fieldset'):
@@ -100,6 +123,111 @@ def get_participants(code):
         return users
     except Exception:
         return set()
+
+
+def _fetch_category_file_records(category):
+    def _commons_query(params):
+        response = requests.get(COMMONS_API, params=params, headers=COMMONS_HEADERS, timeout=20)
+        response.raise_for_status()
+        payload = response.json()
+        if "error" in payload:
+            raise RuntimeError(payload["error"].get("info", "Commons API error"))
+        return payload
+
+    files = []
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "categorymembers",
+        "gcmtitle": f"Category:{category}",
+        "gcmtype": "file",
+        "gcmlimit": "max",
+        "prop": "imageinfo|categories",
+        "iiprop": "user",
+        "iilimit": "1",
+        "cllimit": "max",
+    }
+
+    while True:
+        payload = _commons_query(params)
+        pages = payload.get("query", {}).get("pages", {})
+
+        for page in pages.values():
+            imageinfo = page.get("imageinfo", [])
+            uploader = imageinfo[0].get("user") if imageinfo else None
+            categories = [cat.get("title", "").lower() for cat in page.get("categories", [])]
+            is_quality_image = any(
+                keyword in category_name
+                for category_name in categories
+                for keyword in QUALITY_IMAGE_KEYWORDS
+            )
+            files.append({
+                "uploader": uploader,
+                "is_quality_image": is_quality_image,
+            })
+
+        continuation = payload.get("continue")
+        if not continuation:
+            break
+        params.update(continuation)
+
+    return files
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_campaign_structural_metrics(code):
+    category = code_to_category(code)
+    if not category:
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    try:
+        file_records = _fetch_category_file_records(category)
+    except Exception:
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    total_uploads = len(file_records)
+    if total_uploads == 0:
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    quality_count = sum(1 for file_record in file_records if file_record["is_quality_image"])
+    quality_image_share = (quality_count / total_uploads) * 100
+
+    uploader_counts = defaultdict(int)
+    for file_record in file_records:
+        uploader = file_record["uploader"]
+        if uploader:
+            uploader_counts[uploader] += 1
+
+    if uploader_counts:
+        top_uploader_count = max(1, ceil(len(uploader_counts) * 0.10))
+        top_uploads = sum(sorted(uploader_counts.values(), reverse=True)[:top_uploader_count])
+        top10_uploader_share = (top_uploads / total_uploads) * 100
+    else:
+        top10_uploader_share = 100.0
+
+    return {
+        "quality_image_share": quality_image_share,
+        "top10_uploader_share": top10_uploader_share,
+        "total_uploads": total_uploads,
+    }
+
+
+def fetch_structural_metrics_concurrently(codes, threads=8):
+    results = {}
+    total = len(codes)
+    if total == 0:
+        return results
+
+    with ThreadPoolExecutor(max_workers=min(threads, max(1, total))) as executor:
+        future_to_code = {executor.submit(get_campaign_structural_metrics, code): code for code in codes}
+        for future in as_completed(future_to_code):
+            code = future_to_code[future]
+            try:
+                results[code] = future.result()
+            except Exception:
+                results[code] = {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+
+    return results
 
 
 def fetch_all_concurrently(codes, threads=16):
@@ -157,6 +285,10 @@ def create_heatmap(events, country_name):
                 overlap = len(source_users & events[target])
                 matrix[i, j] = (overlap / len(source_users)) * 100
 
+    max_retention = np.nanmax(matrix) if np.size(matrix) else 0.0
+    rounded_max = max(10, int(np.ceil(max_retention / 10.0) * 10))
+    np.fill_diagonal(matrix, rounded_max)
+
     fig, ax = plt.subplots(figsize=(max(5, size * 1.2), max(4, size)))
     fig.patch.set_facecolor(CARD_LIGHT)
     ax.patch.set_facecolor(CARD_LIGHT)
@@ -166,7 +298,7 @@ def create_heatmap(events, country_name):
         xticklabels=readable_labels, yticklabels=readable_labels,
         cmap=WIKI_CMAP, linewidths=1, linecolor="#ffffff",
         cbar_kws={'label': 'Retention (%)'},
-        vmin=0, vmax=100, ax=ax,
+        vmin=0, vmax=rounded_max, ax=ax,
         annot_kws={"fontweight": "bold", "fontsize": 10}
     )
 
@@ -180,13 +312,29 @@ def create_heatmap(events, country_name):
     return fig
 
 
+def _figure_to_png(fig):
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=200, bbox_inches="tight")
+    buffer.seek(0)
+    return buffer
+
+
 def render_heatmap_view(valid_countries):
     cols = st.columns(2)
     for idx, (country_code, events) in enumerate(valid_countries.items()):
         fig = create_heatmap(events, COUNTRY_MAP.get(country_code, country_code))
         with cols[idx % 2]:
             with st.container(border=True):
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, use_container_width=True, clear_figure=True)
+                png_bytes = _figure_to_png(fig)
+                st.download_button(
+                    "Download heatmap image",
+                    data=png_bytes,
+                    file_name=f"{country_code}_retention_heatmap.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
+                plt.close(fig)
 
 
 def render_table_view(valid_countries):
@@ -318,48 +466,65 @@ def calculate_stars(score, max_score=100):
     return "★" * stars + "☆" * (5 - stars), stars
 
 
-def generate_health_metrics(target_users, baseline_users, target_code, benchmarks, pure_regional_mode=False):
+def generate_health_metrics(
+    target_users,
+    baseline_users,
+    target_structural_metrics,
+    benchmarks
+):
     metrics = {}
 
-    # 1. RETENTION VECTOR (50% overall weight)
-    if pure_regional_mode:
-        metrics['Retention'] = {'raw': 'Requires Baseline', 'score': 60.0}
+    def relative_score(metric_value, benchmark_value, positive_is_higher=True):
+        if benchmark_value <= 0:
+            return 60.0 if metric_value >= 0 else 0.0
+        if not positive_is_higher:
+            metric_value = max(metric_value, 0.0)
+            benchmark_value = max(benchmark_value, 0.0)
+            if metric_value <= 0:
+                return 0.0
+            return min(100.0, max(0.0, (benchmark_value / metric_value) * 60))
+        if metric_value <= 0:
+            return 0.0
+        return min(100.0, max(0.0, (metric_value / benchmark_value) * 60))
+
+    if baseline_users:
+        overlap = len(target_users & baseline_users)
+        retention_rate = (overlap / len(baseline_users)) * 100
     else:
-        if baseline_users:
-            overlap = len(target_users & baseline_users)
-            retention_rate = (overlap / len(baseline_users)) * 100
-        else:
-            retention_rate = 0.0
-        ret_score = (retention_rate / benchmarks['retention'] * 60) if benchmarks['retention'] > 0 else 60.0
-        metrics['Retention'] = {'raw': f"{retention_rate:.1f}%", 'score': min(100.0, max(0.0, ret_score))}
+        retention_rate = 0.0
+    metrics['Retention'] = {
+        'raw': f"{retention_rate:.1f}%",
+        'score': relative_score(retention_rate, benchmarks['retention'], positive_is_higher=True)
+    }
 
-    # 2. GROWTH VECTOR (20% overall weight)
-    if pure_regional_mode:
-        metrics['Growth'] = {'raw': "Baseline Hidden", 'score': 60.0}
+    if target_users:
+        new_users = len(target_users - baseline_users)
+        growth_rate = (new_users / len(target_users)) * 100
     else:
-        if target_users:
-            new_users = len(target_users - baseline_users)
-            growth_rate = (new_users / len(target_users)) * 100
-        else:
-            growth_rate = 0.0
-        growth_score = (growth_rate / benchmarks['growth'] * 60) if benchmarks['growth'] > 0 else 60.0
-        metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100.0, max(0.0, growth_score))}
+        growth_rate = 0.0
+    metrics['Growth'] = {
+        'raw': f"{growth_rate:.1f}%",
+        'score': relative_score(growth_rate, benchmarks['growth'], positive_is_higher=True)
+    }
 
-    # 3. QUALITY PARAMETER INDEX (15% overall weight)
-    random.seed(target_code)
-    raw_quality = random.uniform(65, 88)
-    quality_score = (raw_quality / benchmarks['quality'] * 60) if benchmarks['quality'] > 0 else 60.0
-    metrics['Quality'] = {'raw': raw_quality, 'score': min(100.0, max(0.0, quality_score))}
+    raw_quality = float(target_structural_metrics.get("quality_image_share", 0.0))
+    quality_baseline = float(benchmarks.get('quality', 0.0))
+    metrics['Quality'] = {
+        'raw': raw_quality,
+        'score': relative_score(raw_quality, quality_baseline, positive_is_higher=True)
+    }
 
-    # 4. STRUCTURAL DIVERSITY INDEX (15% overall weight)
-    raw_diversity = random.uniform(40, 75)
-    diversity_score = (raw_diversity / benchmarks['diversity'] * 60) if benchmarks['diversity'] > 0 else 60.0
-    metrics['Diversity'] = {'raw': raw_diversity, 'score': min(100.0, max(0.0, diversity_score))}
+    raw_diversity = float(target_structural_metrics.get("top10_uploader_share", 100.0))
+    diversity_baseline = float(benchmarks.get('diversity', 0.0))
+    metrics['Diversity'] = {
+        'raw': raw_diversity,
+        'score': relative_score(raw_diversity, diversity_baseline, positive_is_higher=False)
+    }
 
     overall = (
-        (metrics['Retention']['score'] * 0.50) +
-        (metrics['Growth']['score'] * 0.20) +
-        (metrics['Quality']['score'] * 0.15) +
+        (metrics['Retention']['score'] * 0.40) +
+        (metrics['Growth']['score'] * 0.25) +
+        (metrics['Quality']['score'] * 0.20) +
         (metrics['Diversity']['score'] * 0.15)
     )
     metrics['Overall'] = round(overall)
@@ -367,32 +532,36 @@ def generate_health_metrics(target_users, baseline_users, target_code, benchmark
     return metrics
 
 
-def generate_insights(metrics, region_name, benchmarks, pure_regional_mode=False):
+def generate_insights(metrics, region_name, benchmarks):
     insights = []
 
-    if pure_regional_mode:
-        insights.append("Standard Reference Mode: Target is mapped purely against geographic regional averages. Pair an historical benchmark to compute retention vectors.")
-        return insights
-
-    raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
+    raw_ret = float(metrics['Retention']['raw'].replace('%', '')) if isinstance(metrics['Retention']['raw'], str) else float(metrics['Retention']['raw'])
     ret_diff = raw_ret - benchmarks['retention']
     if ret_diff > 5:
-        insights.append(f"Retention Leaderboard: Target performance ({raw_ret:.1f}%) exceeds the 3-star standard by {ret_diff:.1f}%. Strong local contributor management.")
+        insights.append(f"Retention is healthy: {raw_ret:.1f}% is {ret_diff:.1f} percentage points above the regional baseline, indicating strong continuity of contributors from prior campaigns.")
     elif ret_diff < -5:
-        insights.append("Outreach Vulnerability: Retention indexes track lower than the regional baseline profile. Consider engagement workflows targeting historical user logs.")
+        insights.append("Retention is under pressure: the campaign is losing more returning contributors than the regional standard, suggesting a likely engagement or follow-up gap.")
+    else:
+        insights.append("Retention is stable: the campaign is tracking near the regional benchmark, with no major churn signal evident.")
 
-    raw_growth = float(metrics['Growth']['raw'].replace('%', ''))
+    raw_growth = float(metrics['Growth']['raw'].replace('%', '')) if isinstance(metrics['Growth']['raw'], str) else float(metrics['Growth']['raw'])
     if raw_growth > 75 and raw_ret < 10:
-        insights.append(f"High Contributor Churn: High onboarding tracking ({raw_growth:.1f}%) paired with deficient historical asset retention indicating stabilization faults.")
+        insights.append(f"Growth is strong but fragile: {raw_growth:.1f}% new contributors joined, yet retention remains low, which can create churn without sustained re-engagement work.")
     elif raw_growth > 50:
-        insights.append("Healthy Pipelines: Solid incoming audience creation tracks across this execution cycle.")
+        insights.append("Growth pipeline is healthy: the campaign is attracting a substantial influx of new contributors and is expanding the contributor base beyond the historical core.")
+    elif raw_growth < 20:
+        insights.append("Growth momentum is limited: the campaign is not expanding the contributor base enough to offset retention losses.")
 
-    if metrics['Quality']['raw'] > 75:
-        insights.append("Content Stability: Media deletion indicators remain well within acceptable variance margins.")
+    if metrics['Quality']['score'] >= 70:
+        insights.append("Quality image signal is outperforming the regional norm: a larger share of uploaded files meets Commons quality standards.")
+    elif metrics['Quality']['score'] < 40:
+        insights.append("Quality image signal is below benchmark: the campaign is producing fewer files that meet the regional quality threshold.")
+    else:
+        insights.append("Quality image signal is near benchmark: the campaign is broadly aligned with the regional quality profile.")
 
     if metrics['Diversity']['score'] < 40:
-        insights.append("Structural Vulnerability: Upload distribution is heavily dependent on unique high-volume power contributors.")
+        insights.append("Diversity remains concentrated: a small set of contributors accounts for a large share of uploads, which reduces resilience and breadth.")
     else:
-        insights.append("Democratized Footprint: Good structural distribution of assets across the active execution group.")
+        insights.append("Diversity is healthy: upload activity is comparatively spread across a wider contributor base, which supports campaign resilience and participation equity.")
 
     return insights

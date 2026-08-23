@@ -1,100 +1,148 @@
 # Wikimedia Campaign Suite
 
-The **Wikimedia Campaign Suite** is an advanced analytics platform engineered to monitor, evaluate, and benchmark community participation across international Wikimedia photo competitions (such as *Wiki Loves Monuments*, *Wiki Loves Earth*, and *Wiki Loves Folklore*). By aggregating live log data from Wikimedia Toolforge, the application delivers actionable data visualizations and automated health assessments for community organizers and program evaluators.
+A Streamlit-based analytics platform for evaluating Wikimedia campaign participation, contributor retention, and campaign health across regional peer benchmarks.
 
----
+## Overview
 
-## 🧭 Application Modules
+The Wikimedia Campaign Suite supports organizers, evaluators, and stakeholders working with Wikimedia campaigns such as Wiki Loves Monuments, Wiki Loves Earth, Wiki Loves Folklore, and Wiki Loves Bangla. It combines live Wikimedia metadata with cohort-based analytics to answer two core questions:
 
-### 1. Cross-Event Retention Analytics
+- How contributors move across campaigns and years.
+- How healthy a campaign appears relative to regional peer performance.
 
-This module maps how effectively campaigns retain historical contributors over multiple years or translate interest between different competition themes.
+The application has two main operating modes:
 
-* **Heatmap View:** Generates a cross-tabulation matrix calculating the precise percentage directional migration and retention from a source campaign to a target campaign.
-* **Comparative Table:** Aggregates multi-year performance parameters including mean, median, maximum, and standard deviation tracking metrics.
-* **Choropleth Worldmap:** Renders global metrics using regional geographic layers to identify high-performing territories at a glance.
+1. Retention Analytics
+   - Compare contributor overlap across years and campaigns.
+   - View retention matrices, summary tables, and world maps.
+2. Health Evaluation
+   - Score a campaign using weighted metrics against regional benchmark clusters.
+   - Surface diagnostics and actionable insights for program strategy.
 
-### 2. Campaign Health Evaluation Suite
+## Key Features
 
-Provides an automated diagnostic assessment scorecard by measuring a campaign's performance against historical configurations and localized geographic peer benchmarks.
+- Contributor extraction from Wikimedia campaign categories via Toolforge.
+- Regional peer benchmarking by country cluster.
+- Weighted health scoring for retention, growth, quality image share, and diversity.
+- Retention heatmaps, summary tables, and choropleth map views.
+- Downloadable heatmap image exports.
+- Streamlit UI tuned for rapid campaign review and reporting.
 
----
+## Architecture
 
-## 📊 Methodology
+The project is structured as:
 
-The evaluation engine leverages a standardized composite weighting framework combined with dynamic cohort normalization to eliminate static geographic bias.
+- `app.py` — Streamlit application and UI.
+- `analytics.py` — data collection, metric logic, scoring, insights, and visualizations.
+- `styles.css` — theme and UI styling.
+- `SCIENTIFIC_REVIEW.md` — original methodological review and caveats.
 
-### Health Score Weight Distribution
+## Methodology
 
-The overall health score (scaled from 0 to 100) is calculated via a weighted index across four core metrics:
+### Retention analytics
 
-| Metric Pillar | Weight | Description |
-| --- | --- | --- |
-| **Retention** | **50%** | The proportion of contributors from the baseline campaign who returned to participate in the target campaign. |
-| **Growth** | **20%** | The percentage of the active cohort consists of new, first-time participants. |
-| **Quality** | **15%** | A calculated stability index evaluating upload survival rates and adherence to deletion guidelines. |
-| **Diversity** | **15%** | An outreach equity index measuring the distribution of contributions across the user base to ensure the campaign is not reliant on isolated power-users. |
+Directional campaign retention is calculated as:
 
-### Dynamic Regional Benchmarking
+Retention(Source -> Target) = (|Source ∩ Target| / |Source|) × 100
 
-To maintain objective scoring, the suite avoids rigid static metrics. Instead, it utilizes an automated peer-grouping framework:
+This supports cross-year and cross-event movement analysis for contributors.
 
-1. **Regional Grouping:** When an event is evaluated, the engine flags its geographic region (e.g., *South Asia*, *ESEAP*, *Northern & Western Europe*).
-2. **Footprint Scans:** The platform queries data for all countries within that designated region for both the target and preceding campaign years.
-3. **Top 2 Identification:** The engine isolates the **top two countries** within the region displaying the largest active participant footprints.
-4. **Baseline Standardization:** The parameters (Retention, Growth, Quality, and Diversity) of these top two volume drivers are averaged. This merged baseline value represents the regional standard and is mapped precisely to a **3-Star (`★★★☆☆`) baseline score** (60 points). Performance above or below this baseline scales dynamically.
+### Health evaluation
 
----
+The health score is computed on a 0–100 scale using a weighted composite framework:
 
-## 💡 Use Cases
+- Retention: 40%
+- Growth capacity: 25%
+- Quality Image: 20%
+- Diversity: 15%
 
-### Program Evaluators & Grant Officers
+The quality image metric uses the Commons category structure and counts files whose category path includes official quality categories such as `Category:Quality images` and `Category:Featured pictures`.
 
-* **Impact Verification:** Quantify the exact onboarding and legacy sustainability value of funding allocations across regional chapters.
-* **Objective Comparative Analysis:** Compare an event's performance fairly by evaluating it directly against its nearest economic and demographic regional peers.
+### Regional benchmarking
 
-### Local Campaign Organizers
+The campaign is compared against the strongest peer countries in the same geographic group. The app:
 
-* **Churn Diagnostics:** Determine if an execution strategy suffers from low retention rates (veteran contributor drop-off) or weak growth pipelines (failure to attract newcomers).
-* **Data-Backed Strategy Adjustments:** Use automated, contextual smart insights to adjust outreach models, implement community mentoring programs, or balance upload distributions.
+1. selects the region for the target campaign,
+2. identifies peer countries in that region,
+3. computes benchmark values from the top regional performer cluster,
+4. normalizes the target campaign against those values.
 
----
+This reduces unfair comparisons caused by static global thresholds and better reflects regional campaign conditions.
 
-## 🛠️ Installation and Setup
+## Scientific review summary
+
+The core analytical design is technically coherent and practically useful for Wikimedia campaign monitoring.
+
+Strengths:
+
+- Reproducible computational workflow for retention and overlap analysis.
+- Region-aware normalization instead of rigid global thresholds.
+- Parallelized data collection and caching for responsiveness.
+- Multi-view reporting through heatmaps, tables, and geographic maps.
+
+Methodological limitations and caveats:
+
+- The project depends on external Wikimedia API and Toolforge behaviors.
+- Input is restricted to recognized event patterns and campaign code syntax.
+- Quality image status is a practical Commons quality-category proxy rather than a full editorial assessment.
+- Concentration-based diversity is informative but does not fully capture thematic or geographic spread.
+- Regional benchmarking is comparative and heuristic, not a formal causal model.
+
+## Installation
 
 ### Prerequisites
 
-* Python 3.9 or higher
-* Internet connectivity (to process live categories via Wikimedia Toolforge APIs)
+- Python 3.9+
+- Internet access for Wikimedia API requests
 
-### Local Deployment
+### Install dependencies
 
-1. Clone this repository to your environment:
-```bash
-git clone https://github.com/your-username/wikimedia-campaign-suite.git
-cd wikimedia-campaign-suite
-
-```
-
-
-2. Install the necessary dependencies:
 ```bash
 pip install streamlit requests numpy pandas matplotlib seaborn plotly
-
 ```
 
+### Run the app
 
-3. Launch the Streamlit server:
 ```bash
 streamlit run app.py
-
 ```
 
+## Usage
 
+### Campaign syntax
 
-### Event Code Syntax Guide
+Use campaign identifiers in this form:
 
-To query campaigns accurately inside the application, input standard text sequences following this structure: `[Event Code][Country Code][Year]`
+`[event][country][year]`
 
-* **wlm** (Wiki Loves Monuments), **wle** (Wiki Loves Earth), **wlf** (Wiki Loves Folklore), **wlb** (Wiki Loves Bangla)
-* Example entries: `wlmbd24` (Wiki Loves Monuments Bangladesh 2024), `wlmde25` (Wiki Loves Monuments Germany 2025)
+Examples:
+
+- `wlmbd24` — Wiki Loves Monuments Bangladesh 2024
+- `wlmde25` — Wiki Loves Monuments Germany 2025
+- `wlein22` — Wiki Loves Earth India 2022
+
+### Retention Analytics workflow
+
+1. Choose the suite mode.
+2. Enter campaign codes or use the selection builder.
+3. Run the dashboard to compute retention matrices and summary tables.
+4. Download heatmap images for reporting.
+
+### Health Evaluation workflow
+
+1. Enter the target campaign code.
+2. Select the reference model (previous year baseline or custom reference campaign).
+3. Choose the geographic region.
+4. Run the diagnostic analysis.
+5. Review the weighted scorecard and supporting insights.
+
+## Data and quality notes
+
+The scoring model is designed as a comparative evaluation tool instead of a definitive measure of campaign quality. It is best used for trend monitoring, regional comparison, and strategic review.
+
+## License
+
+This project is intended for research and operational analysis use in Wikimedia campaign monitoring. Please review repository policy and licensing terms before redistribution or deployment in production environments.
+
+## Contributing
+
+Contributions are welcome. Improvements that strengthen benchmark calibration, performance, or reliability are especially valuable.
