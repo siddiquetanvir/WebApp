@@ -132,14 +132,12 @@ with st.sidebar:
         target_event = st.text_input("Target Campaign Registry Code", value="", placeholder="e.g., wlmbd24").strip()
         
         st.markdown("---")
-        comp_mode = st.radio("Comparative Metric Reference Framework", ["Previous Year Baseline", "Custom Verification Code", "Pure Regional Standards Only"])
-        
-        pure_regional_mode = False
+        comp_mode = st.radio("Comparative Metric Reference Framework", ["Previous Year Baseline", "Custom Verification Code"])
         baseline_event = ""
-        
+
         if comp_mode == "Custom Verification Code":
             baseline_event = st.text_input("Custom Baseline Campaign Code", value="", placeholder="e.g., wlmbd22").strip()
-        elif comp_mode == "Previous Year Baseline":
+        else:
             if target_event:
                 match = CODE_RE.match(target_event.lower())
                 if match:
@@ -150,9 +148,6 @@ with st.sidebar:
                     st.warning("Ensure target syntax matches global standards.")
             else:
                 st.info("Input a valid target registry parameter to auto-generate baseline mapping.")
-        else:
-            pure_regional_mode = True
-            st.info("Standalone Diagnostic Mode active. Measuring against region standards.")
             
         region = st.selectbox("Geographic Standardization Framework", list(REGION_COUNTRY_MAPPING.keys()))
         
@@ -238,7 +233,7 @@ else:
         year_int = int(year_str)
         prev_year_str = f"{year_int - 1:02d}"
 
-        if not pure_regional_mode and not baseline_event:
+        if not baseline_event:
             st.error("Execution halted: Comparative tracking requires a baseline event sequence.")
             st.stop()
 
@@ -252,7 +247,7 @@ else:
                 scan_pool.append(f"{event_type}{cc}{year_str}")
                 scan_pool.append(f"{event_type}{cc}{prev_year_str}")
             
-            if not pure_regional_mode and baseline_event:
+            if baseline_event:
                 scan_pool.append(baseline_event.lower())
             scan_pool.append(target_event.lower())
             scan_pool = list(set(scan_pool))
@@ -273,7 +268,7 @@ else:
             structural_metrics = fetch_structural_metrics_concurrently(list(set(structural_codes)))
             
             # Extract metrics across top 3 volume drivers
-            rep_retentions, rep_growths, rep_qualities, rep_diversities = [], [], [], []
+            rep_retentions, rep_growths, rep_quality_rates, rep_diversities = [], [], [], []
             for cc in top_3_countries:
                 t_code = f"{event_type}{cc}{year_str}"
                 b_code = f"{event_type}{cc}{prev_year_str}"
@@ -286,13 +281,13 @@ else:
                     gro_val = (len(t_u - b_u) / len(t_u) * 100) if t_u else 40.0
                     rep_retentions.append(ret_val)
                     rep_growths.append(gro_val)
-                rep_qualities.append(float(structural.get("deletion_rate", 0.0)))
+                rep_quality_rates.append(float(structural.get("quality_image_share", 0.0)))
                 rep_diversities.append(float(structural.get("top10_uploader_share", 100.0)))
             
             benchmarks = {
                 'retention': float(np.mean(rep_retentions)) if rep_retentions else 15.0,
                 'growth': float(np.mean(rep_growths)) if rep_growths else 40.0,
-                'quality': float(np.mean(rep_qualities)) if rep_qualities else 0.0,
+                'quality': float(np.mean(rep_quality_rates)) if rep_quality_rates else 0.0,
                 'diversity': float(np.mean(rep_diversities)) if rep_diversities else 100.0
             }
             
@@ -304,10 +299,10 @@ else:
                 st.info("Establishing regional normalization indices based on standardized baseline coordinates.")
 
             target_users = all_fetched_data.get(target_event.lower(), set())
-            base_users = all_fetched_data.get(baseline_event.lower(), set()) if not pure_regional_mode else set()
+            base_users = all_fetched_data.get(baseline_event.lower(), set())
             target_structural_metrics = structural_metrics.get(
                 target_event.lower(),
-                {"deletion_rate": 0.0, "top10_uploader_share": 100.0, "total_uploads": 0}
+                {"quality_image_share": 0.0, "top10_uploader_share": 100.0, "total_uploads": 0}
             )
 
             if not target_users:
@@ -318,8 +313,7 @@ else:
                 target_users,
                 base_users,
                 target_structural_metrics,
-                benchmarks,
-                pure_regional_mode
+                benchmarks
             )
             
             col1, col2 = st.columns([1, 1.2], gap="large")
@@ -330,17 +324,21 @@ else:
 <span>{target_event.upper()} Metrics Matrix</span>
 <span></span>
 </div>
-<div class="metric-label">Retention Index ({metrics['Retention']['raw']})</div>
-<div class="metric-desc">Percentage of users retained from the baseline campaign (50% score weight).</div>
+<div class="metric-label">Retention Index</div>
+<div class="metric-desc">Percentage of users retained from the baseline campaign (40% score weight)</div>
+<div class="metric-value">{metrics['Retention']['raw']}</div>
 <div class="stars">{calculate_stars(metrics['Retention']['score'])[0]}</div>
-<div class="metric-label">Growth Capacity ({metrics['Growth']['raw']})</div>
-<div class="metric-desc">Percentage of fresh, first-time active contributors (20% score weight).</div>
+<div class="metric-label">Growth Capacity</div>
+<div class="metric-desc">Percentage of fresh, first-time active contributors (25% score weight)</div>
+<div class="metric-value">{metrics['Growth']['raw']}</div>
 <div class="stars">{calculate_stars(metrics['Growth']['score'])[0]}</div>
-<div class="metric-label">Deletion Rate ({metrics['Quality']['raw']:.1f}%)</div>
-<div class="metric-desc">15% score weight.</div>
+<div class="metric-label">Quality Image</div>
+<div class="metric-desc">Percentage of quality images across total submissions (20% score weight)</div>
+<div class="metric-value">{metrics['Quality']['raw']:.2f}%</div>
 <div class="stars">{calculate_stars(metrics['Quality']['score'])[0]}</div>
-<div class="metric-label">Top 10% Uploader Share ({metrics['Diversity']['raw']:.1f}%)</div>
-<div class="metric-desc">15% score weight.</div>
+<div class="metric-label">Diversity</div>
+<div class="metric-desc">Top 10% uploader share (15% score weight)</div>
+<div class="metric-value">{metrics['Diversity']['raw']:.1f}%</div>
 <div class="stars">{calculate_stars(metrics['Diversity']['score'])[0]}</div>
 <hr style="border-color: rgba(255,255,255,0.1); margin: 1.5rem 0;">
 <div class="metric-label">Overall Weighted Evaluation Score</div>
@@ -352,18 +350,17 @@ else:
                 st.markdown("### Diagnostic Context Insights")
                 st.markdown(f"<p style='color: {TEXT_MUTED}; margin-bottom: 1.5rem;'>Automated strategic diagnostic evaluations measured relative to peers in the <b>{region}</b> cluster framework.</p>", unsafe_allow_html=True)
                 
-                insights = generate_insights(metrics, region.split(" (")[0], benchmarks, pure_regional_mode)
-                
+                insights = generate_insights(metrics, region.split(" (")[0], benchmarks)
+
                 for insight in insights:
                     st.markdown(f"""
                     <div class="insight-box">
                         <p>{insight}</p>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
                 st.markdown("<br>", unsafe_allow_html=True)
                 with st.expander("View Quantifiable Cohort Footprints"):
                     st.write(f"**Target Campaign Total Contributors:** {len(target_users)}")
-                    if not pure_regional_mode:
-                        st.write(f"**Historical Baseline Group Size:** {len(base_users)}")
-                        st.write(f"**Common Intersecting User Core:** {len(target_users & base_users)}")
+                    st.write(f"**Historical Baseline Group Size:** {len(base_users)}")
+                    st.write(f"**Common Intersecting User Core:** {len(target_users & base_users)}")

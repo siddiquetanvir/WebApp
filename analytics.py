@@ -1,3 +1,4 @@
+import io
 import re
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -69,19 +70,13 @@ COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 COMMONS_HEADERS = {
     "User-Agent": "WikimediaCampaignSuite/1.0 (https://github.com/siddiquetanvir/WebApp)"
 }
-DELETION_CATEGORY_KEYWORDS = (
-    "deletion request",
-    "proposed deletion",
-    "speedy deletion",
-    "deletion requests",
-    "candidates for speedy deletion",
-)
-DELETION_CATEGORY_TITLES = (
-    "Category:Deletion requests",
-    "Category:Commons deletion requests",
-    "Category:Proposed deletion",
-    "Category:Speedy deletion",
-    "Category:Candidates for speedy deletion",
+# Commons exposes selected quality images through the category tree (for example,
+# Category:Quality images / Category:Featured pictures). Counting files whose
+# campaign category membership also includes one of these categories is the reliable
+# API-based detection procedure for this metric.
+QUALITY_IMAGE_KEYWORDS = (
+    "quality images",
+    "featured pictures",
 )
 
 
@@ -151,7 +146,6 @@ def _fetch_category_file_records(category):
         "iiprop": "user",
         "iilimit": "1",
         "cllimit": "max",
-        "clcategories": "|".join(DELETION_CATEGORY_TITLES),
     }
 
     while True:
@@ -162,14 +156,14 @@ def _fetch_category_file_records(category):
             imageinfo = page.get("imageinfo", [])
             uploader = imageinfo[0].get("user") if imageinfo else None
             categories = [cat.get("title", "").lower() for cat in page.get("categories", [])]
-            flagged_for_deletion = any(
+            is_quality_image = any(
                 keyword in category_name
                 for category_name in categories
-                for keyword in DELETION_CATEGORY_KEYWORDS
+                for keyword in QUALITY_IMAGE_KEYWORDS
             )
             files.append({
                 "uploader": uploader,
-                "flagged_for_deletion": flagged_for_deletion,
+                "is_quality_image": is_quality_image,
             })
 
         continuation = payload.get("continue")
@@ -184,19 +178,19 @@ def _fetch_category_file_records(category):
 def get_campaign_structural_metrics(code):
     category = code_to_category(code)
     if not category:
-        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
 
     try:
         file_records = _fetch_category_file_records(category)
     except Exception:
-        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
 
     total_uploads = len(file_records)
     if total_uploads == 0:
-        return {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+        return {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
 
-    flagged_count = sum(1 for file_record in file_records if file_record["flagged_for_deletion"])
-    deletion_rate = (flagged_count / total_uploads) * 100
+    quality_count = sum(1 for file_record in file_records if file_record["is_quality_image"])
+    quality_image_share = (quality_count / total_uploads) * 100
 
     uploader_counts = defaultdict(int)
     for file_record in file_records:
@@ -212,7 +206,7 @@ def get_campaign_structural_metrics(code):
         top10_uploader_share = 100.0
 
     return {
-        "deletion_rate": deletion_rate,
+        "quality_image_share": quality_image_share,
         "top10_uploader_share": top10_uploader_share,
         "total_uploads": total_uploads,
     }
@@ -231,7 +225,7 @@ def fetch_structural_metrics_concurrently(codes, threads=8):
             try:
                 results[code] = future.result()
             except Exception:
-                results[code] = {"deletion_rate": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
+                results[code] = {"quality_image_share": 0.0, "top10_uploader_share": 0.0, "total_uploads": 0}
 
     return results
 
@@ -291,6 +285,10 @@ def create_heatmap(events, country_name):
                 overlap = len(source_users & events[target])
                 matrix[i, j] = (overlap / len(source_users)) * 100
 
+    max_retention = np.nanmax(matrix) if np.size(matrix) else 0.0
+    rounded_max = max(10, int(np.ceil(max_retention / 10.0) * 10))
+    np.fill_diagonal(matrix, rounded_max)
+
     fig, ax = plt.subplots(figsize=(max(5, size * 1.2), max(4, size)))
     fig.patch.set_facecolor(CARD_LIGHT)
     ax.patch.set_facecolor(CARD_LIGHT)
@@ -300,7 +298,7 @@ def create_heatmap(events, country_name):
         xticklabels=readable_labels, yticklabels=readable_labels,
         cmap=WIKI_CMAP, linewidths=1, linecolor="#ffffff",
         cbar_kws={'label': 'Retention (%)'},
-        vmin=0, vmax=100, ax=ax,
+        vmin=0, vmax=rounded_max, ax=ax,
         annot_kws={"fontweight": "bold", "fontsize": 10}
     )
 
@@ -314,13 +312,29 @@ def create_heatmap(events, country_name):
     return fig
 
 
+def _figure_to_png(fig):
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=200, bbox_inches="tight")
+    buffer.seek(0)
+    return buffer
+
+
 def render_heatmap_view(valid_countries):
     cols = st.columns(2)
     for idx, (country_code, events) in enumerate(valid_countries.items()):
         fig = create_heatmap(events, COUNTRY_MAP.get(country_code, country_code))
         with cols[idx % 2]:
             with st.container(border=True):
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, use_container_width=True, clear_figure=True)
+                png_bytes = _figure_to_png(fig)
+                st.download_button(
+                    "Download heatmap image",
+                    data=png_bytes,
+                    file_name=f"{country_code}_retention_heatmap.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
+                plt.close(fig)
 
 
 def render_table_view(valid_countries):
@@ -456,61 +470,61 @@ def generate_health_metrics(
     target_users,
     baseline_users,
     target_structural_metrics,
-    benchmarks,
-    pure_regional_mode=False
+    benchmarks
 ):
     metrics = {}
 
-    # 1. RETENTION VECTOR (50% overall weight)
-    if pure_regional_mode:
-        metrics['Retention'] = {'raw': 'Requires Baseline', 'score': 60.0}
-    else:
-        if baseline_users:
-            overlap = len(target_users & baseline_users)
-            retention_rate = (overlap / len(baseline_users)) * 100
-        else:
-            retention_rate = 0.0
-        ret_score = (retention_rate / benchmarks['retention'] * 60) if benchmarks['retention'] > 0 else 60.0
-        metrics['Retention'] = {'raw': f"{retention_rate:.1f}%", 'score': min(100.0, max(0.0, ret_score))}
+    def relative_score(metric_value, benchmark_value, positive_is_higher=True):
+        if benchmark_value <= 0:
+            return 60.0 if metric_value >= 0 else 0.0
+        if not positive_is_higher:
+            metric_value = max(metric_value, 0.0)
+            benchmark_value = max(benchmark_value, 0.0)
+            if metric_value <= 0:
+                return 0.0
+            return min(100.0, max(0.0, (benchmark_value / metric_value) * 60))
+        if metric_value <= 0:
+            return 0.0
+        return min(100.0, max(0.0, (metric_value / benchmark_value) * 60))
 
-    # 2. GROWTH VECTOR (20% overall weight)
-    if pure_regional_mode:
-        metrics['Growth'] = {'raw': "Baseline Hidden", 'score': 60.0}
+    if baseline_users:
+        overlap = len(target_users & baseline_users)
+        retention_rate = (overlap / len(baseline_users)) * 100
     else:
-        if target_users:
-            new_users = len(target_users - baseline_users)
-            growth_rate = (new_users / len(target_users)) * 100
-        else:
-            growth_rate = 0.0
-        growth_score = (growth_rate / benchmarks['growth'] * 60) if benchmarks['growth'] > 0 else 60.0
-        metrics['Growth'] = {'raw': f"{growth_rate:.1f}%", 'score': min(100.0, max(0.0, growth_score))}
+        retention_rate = 0.0
+    metrics['Retention'] = {
+        'raw': f"{retention_rate:.1f}%",
+        'score': relative_score(retention_rate, benchmarks['retention'], positive_is_higher=True)
+    }
 
-    # 3. QUALITY PARAMETER INDEX (15% overall weight, lower deletion is better)
-    raw_quality = float(target_structural_metrics.get("deletion_rate", 0.0))
+    if target_users:
+        new_users = len(target_users - baseline_users)
+        growth_rate = (new_users / len(target_users)) * 100
+    else:
+        growth_rate = 0.0
+    metrics['Growth'] = {
+        'raw': f"{growth_rate:.1f}%",
+        'score': relative_score(growth_rate, benchmarks['growth'], positive_is_higher=True)
+    }
+
+    raw_quality = float(target_structural_metrics.get("quality_image_share", 0.0))
     quality_baseline = float(benchmarks.get('quality', 0.0))
-    if raw_quality <= 0:
-        quality_score = 100.0 if quality_baseline >= 0 else 60.0
-    elif quality_baseline <= 0:
-        quality_score = 0.0
-    else:
-        quality_score = (quality_baseline / raw_quality) * 60
-    metrics['Quality'] = {'raw': raw_quality, 'score': min(100.0, max(0.0, quality_score))}
+    metrics['Quality'] = {
+        'raw': raw_quality,
+        'score': relative_score(raw_quality, quality_baseline, positive_is_higher=True)
+    }
 
-    # 4. STRUCTURAL DIVERSITY INDEX (15% overall weight, lower concentration is better)
     raw_diversity = float(target_structural_metrics.get("top10_uploader_share", 100.0))
     diversity_baseline = float(benchmarks.get('diversity', 0.0))
-    if raw_diversity <= 0:
-        diversity_score = 100.0 if diversity_baseline >= 0 else 60.0
-    elif diversity_baseline <= 0:
-        diversity_score = 0.0
-    else:
-        diversity_score = (diversity_baseline / raw_diversity) * 60
-    metrics['Diversity'] = {'raw': raw_diversity, 'score': min(100.0, max(0.0, diversity_score))}
+    metrics['Diversity'] = {
+        'raw': raw_diversity,
+        'score': relative_score(raw_diversity, diversity_baseline, positive_is_higher=False)
+    }
 
     overall = (
-        (metrics['Retention']['score'] * 0.50) +
-        (metrics['Growth']['score'] * 0.20) +
-        (metrics['Quality']['score'] * 0.15) +
+        (metrics['Retention']['score'] * 0.40) +
+        (metrics['Growth']['score'] * 0.25) +
+        (metrics['Quality']['score'] * 0.20) +
         (metrics['Diversity']['score'] * 0.15)
     )
     metrics['Overall'] = round(overall)
@@ -518,34 +532,36 @@ def generate_health_metrics(
     return metrics
 
 
-def generate_insights(metrics, region_name, benchmarks, pure_regional_mode=False):
+def generate_insights(metrics, region_name, benchmarks):
     insights = []
 
-    if pure_regional_mode:
-        insights.append("Standard Reference Mode: Target is mapped purely against geographic regional averages. Pair an historical benchmark to compute retention vectors.")
-        return insights
-
-    raw_ret = float(metrics['Retention']['raw'].replace('%', ''))
+    raw_ret = float(metrics['Retention']['raw'].replace('%', '')) if isinstance(metrics['Retention']['raw'], str) else float(metrics['Retention']['raw'])
     ret_diff = raw_ret - benchmarks['retention']
     if ret_diff > 5:
-        insights.append(f"Retention Leaderboard: Target performance ({raw_ret:.1f}%) exceeds the 3-star standard by {ret_diff:.1f}%. Strong local contributor management.")
+        insights.append(f"Retention is healthy: {raw_ret:.1f}% is {ret_diff:.1f} percentage points above the regional baseline, indicating strong continuity of contributors from prior campaigns.")
     elif ret_diff < -5:
-        insights.append("Outreach Vulnerability: Retention indexes track lower than the regional baseline profile. Consider engagement workflows targeting historical user logs.")
+        insights.append("Retention is under pressure: the campaign is losing more returning contributors than the regional standard, suggesting a likely engagement or follow-up gap.")
+    else:
+        insights.append("Retention is stable: the campaign is tracking near the regional benchmark, with no major churn signal evident.")
 
-    raw_growth = float(metrics['Growth']['raw'].replace('%', ''))
+    raw_growth = float(metrics['Growth']['raw'].replace('%', '')) if isinstance(metrics['Growth']['raw'], str) else float(metrics['Growth']['raw'])
     if raw_growth > 75 and raw_ret < 10:
-        insights.append(f"High Contributor Churn: High onboarding tracking ({raw_growth:.1f}%) paired with deficient historical asset retention indicating stabilization faults.")
+        insights.append(f"Growth is strong but fragile: {raw_growth:.1f}% new contributors joined, yet retention remains low, which can create churn without sustained re-engagement work.")
     elif raw_growth > 50:
-        insights.append("Healthy Pipelines: Solid incoming audience creation tracks across this execution cycle.")
+        insights.append("Growth pipeline is healthy: the campaign is attracting a substantial influx of new contributors and is expanding the contributor base beyond the historical core.")
+    elif raw_growth < 20:
+        insights.append("Growth momentum is limited: the campaign is not expanding the contributor base enough to offset retention losses.")
 
     if metrics['Quality']['score'] >= 70:
-        insights.append("Content Stability: Deletion-risk indicators are below the regional benchmark profile.")
+        insights.append("Quality image signal is outperforming the regional norm: a larger share of uploaded files meets Commons quality standards.")
     elif metrics['Quality']['score'] < 40:
-        insights.append("Content Risk: Deletion-risk indicators are above the regional benchmark profile.")
+        insights.append("Quality image signal is below benchmark: the campaign is producing fewer files that meet the regional quality threshold.")
+    else:
+        insights.append("Quality image signal is near benchmark: the campaign is broadly aligned with the regional quality profile.")
 
     if metrics['Diversity']['score'] < 40:
-        insights.append("Structural Vulnerability: Upload distribution is concentrated in a small high-volume contributor segment.")
+        insights.append("Diversity remains concentrated: a small set of contributors accounts for a large share of uploads, which reduces resilience and breadth.")
     else:
-        insights.append("Democratized Footprint: Upload distribution is comparatively balanced across contributors.")
+        insights.append("Diversity is healthy: upload activity is comparatively spread across a wider contributor base, which supports campaign resilience and participation equity.")
 
     return insights
