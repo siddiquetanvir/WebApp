@@ -200,8 +200,13 @@ def get_campaign_structural_metrics(code):
 
     if uploader_counts:
         top_uploader_count = max(1, ceil(len(uploader_counts) * 0.10))
-        top_uploads = sum(sorted(uploader_counts.values(), reverse=True)[:top_uploader_count])
-        top10_uploader_share = (top_uploads / total_uploads) * 100
+        sorted_upload_counts = sorted(uploader_counts.values(), reverse=True)
+        top_uploads = sum(sorted_upload_counts[:top_uploader_count])
+        # Use only uploads with a known uploader identity for this concentration metric.
+        # Otherwise files with missing uploader metadata can push the share below
+        # the theoretical minimum for a "top 10% uploader share".
+        attributed_uploads = sum(sorted_upload_counts)
+        top10_uploader_share = (top_uploads / attributed_uploads) * 100
     else:
         top10_uploader_share = 100.0
 

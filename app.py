@@ -113,7 +113,7 @@ with st.sidebar:
                 "Country Matrices", options=COUNTRY_OPTIONS,
                 format_func=country_display_name, key="sel_countries"
             )
-            st.slider("Chronological Index", 2010, 2026, (2021, 2025), key="yr_range")
+            st.slider("Chronological Index", 2005, 2040, (2021, 2025), key="yr_range")
 
             b_col1, b_col2 = st.columns(2)
             b_col1.button("Inject", on_click=add_codes_from_selectors, use_container_width=True)
