@@ -5,7 +5,7 @@ html, body, [class*="css"] {
 }
 
 .stApp {
-    background: radial-gradient(circle at 12% -10%, #183765 0%, #0c1d33 38%, #070d18 100%) !important;
+    background: #0a1526 !important;
 }
 .stApp, .stApp p, .stApp li, .stApp label {
     color: #edf3ff !important;
@@ -14,9 +14,27 @@ div[data-testid="stMarkdownContainer"] p {
     color: #b8c9df !important;
 }
 
+/* Reduce global blank spaces from Streamlit layout engine */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
+/* Reduce gaps globally across all vertical emotion-cache containers */
+div[data-testid="stVerticalBlock"] {
+    gap: 0.8rem !important;
+}
+
+hr {
+    border-color: rgba(255, 255, 255, 0.12);
+    margin: .3rem 0 !important; 
+}
+
 /* Sidebar */
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0e213b 0%, #122d4c 28%, #163e5e 100%) !important;
+    background: #13284a !important;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 section[data-testid="stSidebar"] * {
@@ -33,7 +51,7 @@ section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] sm
 section[data-testid="stSidebar"] textarea, section[data-testid="stSidebar"] input {
     background: rgba(255, 255, 255, 0.08) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
-    border-radius: 10px !important;
+    border-radius: 4px !important;
     color: #ffffff !important;
 }
 section[data-testid="stSidebar"] textarea::placeholder, section[data-testid="stSidebar"] input::placeholder {
@@ -42,31 +60,28 @@ section[data-testid="stSidebar"] textarea::placeholder, section[data-testid="stS
 section[data-testid="stSidebar"] div[data-testid="stExpander"] {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    border-radius: 4px;
 }
 section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
     background: rgba(255, 255, 255, 0.08) !important;
     border-color: rgba(255, 255, 255, 0.18) !important;
-    border-radius: 8px !important;
+    border-radius: 4px !important;
 }
 section[data-testid="stSidebar"] span[data-baseweb="tag"] {
-    background: #2e7d6b !important;
+    background: #3366cc !important;
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(90deg, #2e7d6b 0%, #3366cc 100%);
+    background: #3366cc;
     color: white !important;
     border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 0.6em 1em;
-    box-shadow: 0 6px 18px rgba(46, 125, 107, 0.2);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border-radius: 4px;
+    font-weight: 500;
+    padding: 0.5em 1em;
 }
 .stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 22px rgba(51, 102, 204, 0.25);
+    background: #2855b3;
     color: white !important;
 }
 .stButton > button p {
@@ -75,8 +90,8 @@ section[data-testid="stSidebar"] span[data-baseweb="tag"] {
 div[data-testid="stDownloadButton"] > button {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 10px;
-    font-weight: 600;
+    border-radius: 4px;
+    font-weight: 500;
 }
 div[data-testid="stDownloadButton"] > button p {
     color: __TEXT_LIGHT__ !important;
@@ -84,20 +99,16 @@ div[data-testid="stDownloadButton"] > button p {
 
 /* Typography & Display Layouts */
 .hero-title {
-    font-size: 2.6rem;
-    font-weight: 800;
-    letter-spacing: -1px;
-    line-height: 1.15;
-    margin: 0.4rem 0 0.15rem 0;
-    background: linear-gradient(90deg, #2e7d6b 0%, #3366cc 50%, #d65a4a 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0.5rem 0 0.2rem 0;
+    color: #ffffff;
 }
 .hero-subtitle {
-    color: #dfeaf7 !important;
-    font-size: 1.05rem;
-    margin-bottom: 1.1rem;
+    color: #b8c9df !important;
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 /* Radio Selectors */
@@ -107,116 +118,114 @@ div[data-testid="stRadio"] > div {
 div[data-testid="stRadio"] label {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.16);
-    padding: 0.45rem 1.1rem;
-    border-radius: 999px;
-    transition: all 0.15s ease;
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
 }
 div[data-testid="stRadio"] label:hover {
     border-color: __WIKI_BLUE_LIGHT__;
 }
 div[data-testid="stRadio"] label:has(input:checked) {
-    background: linear-gradient(90deg, __WIKI_BLUE__ 0%, __WIKI_BLUE_DARK__ 100%);
-    border-color: transparent;
+    background: __WIKI_BLUE_DARK__;
+    border-color: __WIKI_BLUE__;
 }
 div[data-testid="stRadio"] label:has(input:checked) p {
     color: white !important;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 /* Data Visualization Elements */
 div[data-testid="stMetric"] {
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
     padding: 1rem 1.2rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 div[data-testid="stMetricLabel"] p {
-    color: #c7d7f3 !important;
-    font-weight: 600;
+    color: #b8c9df !important;
+    font-weight: 500;
 }
 div[data-testid="stMetricValue"] {
-    color: #eaf3ff !important;
-    font-weight: 800;
+    color: #ffffff !important;
+    font-weight: 600;
 }
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background: __CARD_LIGHT__;
-    border-radius: 16px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
-    padding: 0.6rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.8rem;
 }
 div[data-testid="stVerticalBlockBorderWrapper"] * {
     color: __WIKI_INK__ !important;
 }
 div[data-testid="stDataFrame"] {
-    border-radius: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     overflow: hidden;
 }
 hr {
     border-color: rgba(255, 255, 255, 0.12);
+    margin: 1.5rem 0;
 }
 
 /* Health Score Layout Cards */
 .health-card {
-    background: rgba(16, 31, 47, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    padding: 2.5rem;
+    background: rgba(16, 31, 47, 1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 1.5rem;
     margin-top: 0.5rem;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
 }
 .health-title {
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: #edf3ff !important;
-    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #ffffff !important;
+    margin-bottom: 1.2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
-    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 0.8rem;
 }
 .metric-label {
-    font-size: 1.05rem;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 500;
     color: #edf3ff !important;
     margin-bottom: 0.2rem;
     margin-top: 1rem;
 }
 .metric-desc {
     font-size: 0.85rem;
-    color: #b9c9df !important;
+    color: #b8c9df !important;
     margin-bottom: 0.4rem;
 }
 .metric-value {
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #ffffff !important;
     margin-bottom: 0.4rem;
 }
 .stars {
     color: #ffd166 !important;
-    font-size: 1.3rem;
-    letter-spacing: 3px;
+    font-size: 1rem;
+    letter-spacing: 2px;
     margin-bottom: 0.5rem;
 }
 .overall-score {
-    font-size: 2.8rem;
-    font-weight: 800;
+    font-size: 2.2rem;
+    font-weight: 600;
     color: #ffffff !important;
     margin-top: 0.5rem;
 }
 .insight-box {
-    border-left: 4px solid #2e7d6b;
-    background: linear-gradient(90deg, rgba(46, 125, 107, 0.12), rgba(51, 102, 204, 0.05));
-    padding: 1.2rem 1.5rem;
-    border-radius: 0 10px 10px 0;
-    margin-bottom: 1.2rem;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+    border-left: 4px solid #3366cc;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 1rem 1.2rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
 }
 .insight-box p {
     margin: 0 !important;
     color: #edf3ff !important;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.5;
 }

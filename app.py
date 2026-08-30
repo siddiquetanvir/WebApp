@@ -52,7 +52,7 @@ BG_MID = "#13284a"
 TEXT_LIGHT = "#eef3fc"
 TEXT_MUTED = "#a9b9d8"
 
-KORIKATH_LOGO_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Project_Korikath_Logo.svg"
+KORIKATH_LOGO_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Project_Korikath_Logo-dark.svg"
 
 CSS_PATH = Path(__file__).with_name("styles.css")
 with CSS_PATH.open("r", encoding="utf-8") as css_file:
@@ -94,7 +94,8 @@ with st.sidebar:
     )
     
     st.title("Navigation Matrix")
-    app_mode = st.radio("Select Suite Interface", ["Retention Analytics", "Health Evaluation"], horizontal=False)
+    st.subheader("Select Suite Interface")
+    app_mode = st.radio("Select Suite Interface", ["Retention Analytics", "Health Evaluation"], horizontal=False, label_visibility="collapsed")
     
     st.markdown("---")
     
@@ -121,9 +122,10 @@ with st.sidebar:
 
         st.markdown("---")
         VIEW_LABELS = {"Table": "Data Table", "Heatmap": "Heatmap Matrix", "Worldmap": "Choropleth"}
+        st.subheader("Visualization Model")
         view_mode = st.radio(
             "Visualization Model", list(VIEW_LABELS.keys()),
-            format_func=lambda m: VIEW_LABELS[m], horizontal=True, key="view_mode"
+            format_func=lambda m: VIEW_LABELS[m], horizontal=True, key="view_mode", label_visibility="collapsed"
         )
         run_retention = st.button("Process Dashboard Data", type="primary", use_container_width=True)
         
